@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="МessageAir.VIew.ChatView"
+             xmlns:models="clr-namespace:МessageAir.Models"
+             xmlns:converters="clr-namespace:МessageAir.Converters"
+             Title="ChatView">
+
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <converters:BoolToColorConverter x:Key="MessageColorConverter" 
+                TrueColor="#FF0084FF" FalseColor="#FFDDDDDD"/>
+            <converters:BoolToLayoutOptionsConverter x:Key="MessageAlignmentConverter"
+                TrueOption="End" FalseOption="Start"/>
+            <converters:BoolToTextAlignmentConverter x:Key="TextAlignmentConverter"
+                TrueOption="End" FalseOption="Start"/>
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <Grid RowDefinitions="*,Auto,Auto">
+        <!-- Messages List -->
+        <CollectionView ItemsSource="{Binding Messages}"
+                       Grid.Row="0"
+                       VerticalScrollBarVisibility="Always">
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="models:MessageModel">
+                    <Frame Padding="10" 
+                           Margin="5"
+                           CornerRadius="10"
+                           HorizontalOptions="{Binding IsCurrentUser, 
+                               Converter={StaticResource MessageAlignmentConverter}}"
+                           BackgroundColor="{Binding IsCurrentUser, 
+                               Converter={StaticResource MessageColorConverter}}">
+                        <VerticalStackLayout>
+                            <Label Text="{Binding User}" 
+                                   FontAttributes="Bold"
+                                   HorizontalOptions="Fill"
+                                   HorizontalTextAlignment="{Binding IsCurrentUser, 
+                                       Converter={StaticResource TextAlignmentConverter}}"/>
+                            <Label Text="{Binding Text}"
+                                   HorizontalOptions="Fill"
+                                   HorizontalTextAlignment="{Binding IsCurrentUser, 
+                                       Converter={StaticResource TextAlignmentConverter}}"/>
+                            <Label Text="{Binding Timestamp, StringFormat='{0:HH:mm}'}"
+                                   FontSize="Micro"
+                                   HorizontalOptions="Fill"
+                                   HorizontalTextAlignment="{Binding IsCurrentUser, 
+                                       Converter={StaticResource TextAlignmentConverter}}"/>
+                        </VerticalStackLayout>
+                    </Frame>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <!-- Status -->
+        <Label Text="{Binding Status}"
+               Grid.Row="1"
+               HorizontalOptions="Center"
+               Margin="0,5"/>
+
+        <!-- Message Input -->
+        <Grid ColumnDefinitions="*,Auto"
+              Padding="10"
+              Grid.Row="2">
+            <Entry Text="{Binding Message}"
+                   Placeholder="Type your message..."
+                   Grid.Column="0"/>
+            <Button Text="Send"
+                    Command="{Binding SendMessageCommand}"
+                    Grid.Column="1"
+                    Margin="10,0,0,0"
+                    WidthRequest="80"/>
+        </Grid>
+    </Grid>
+
+    <ContentPage.ToolbarItems>
+        <ToolbarItem Text="Disconnect" Command="{Binding DisconnectCommand}"/>
+        <ToolbarItem IconImageSource="user.png" Command="{Binding GoToProfileCommand}"/>
+    </ContentPage.ToolbarItems>
+</ContentPage>

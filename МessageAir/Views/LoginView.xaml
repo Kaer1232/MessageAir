@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="МessageAir.VIew.LoginView"
+             xmlns:vm="clr-namespace:MessageAir.ViewModels"
+             xmlns:converters="clr-namespace:МessageAir.Converters"
+             Title="LoginView">
+
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <converters:InverseBoolConverter x:Key="InverseBoolConverter" />
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <ScrollView>
+        <VerticalStackLayout Spacing="20" Padding="30">
+
+            <!-- Header -->
+            <Label Text="Welcome to MessageAir" 
+                   FontSize="24"
+                   HorizontalOptions="Center"/>
+
+            <!-- Login Form -->
+            <Frame BorderColor="LightGray" 
+                   CornerRadius="10"
+                   Padding="20">
+                <VerticalStackLayout Spacing="15">
+                    <Entry Placeholder="Username" 
+                           Text="{Binding Username}"/>
+
+                    <Entry Placeholder="Password" 
+                           Text="{Binding Password}"
+                           IsPassword="True"/>
+
+                    <Label Text="{Binding AuthStatus}"
+                           TextColor="Red"
+                           HorizontalOptions="Center"/>
+
+                    <Button Text="Login" 
+                            Command="{Binding LoginCommand}"
+                            BackgroundColor="#512BD4"
+                            TextColor="White"
+                            CornerRadius="10"/>
+
+                    <Button Text="Register" 
+                            Command="{Binding RegisterCommand}"
+                            TextColor="#512BD4"
+                            BackgroundColor="Transparent"/>
+                </VerticalStackLayout>
+            </Frame>
+
+            <!-- Status -->
+            <ActivityIndicator IsRunning="{Binding IsBusy}"
+                              IsVisible="{Binding IsBusy}"/>
+
+            <Label Text="{Binding ConnectionStatus}"
+                   HorizontalOptions="Center"/>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

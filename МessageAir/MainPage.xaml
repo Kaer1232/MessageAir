@@ -1,0 +1,40 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="МessageAir.MainPage">
+
+    <Grid RowDefinitions="*,Auto,Auto" Padding="10">
+        <!-- Сообщения -->
+        <CollectionView ItemsSource="{Binding Messages}" Grid.Row="0">
+            <CollectionView.ItemTemplate>
+                <DataTemplate>
+                    <Frame BackgroundColor="{Binding IsIncoming, 
+                            Converter={StaticResource BoolToColorConverter},
+                            ConverterParameter='LightBlue;LightGreen'}"
+                           HorizontalOptions="{Binding IsIncoming, 
+                            Converter={StaticResource BoolToLayoutOptionsConverter},
+                            ConverterParameter='Start;End'}"
+                           Padding="10">
+                        <VerticalStackLayout>
+                            <Label Text="{Binding User}" FontAttributes="Bold"/>
+                            <Label Text="{Binding Text}"/>
+                            <Label Text="{Binding Timestamp, StringFormat='{0:HH:mm}'}" 
+                                   FontSize="Micro"/>
+                        </VerticalStackLayout>
+                    </Frame>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <!-- Поле ввода сообщения -->
+        <Entry Text="{Binding Message}" 
+               Placeholder="Type a message..." 
+               Grid.Row="1"/>
+
+        <!-- Кнопка отправки -->
+        <Button Text="Send" 
+                Command="{Binding SendMessageCommand}" 
+                Grid.Row="2"/>
+    </Grid>
+
+</ContentPage>
