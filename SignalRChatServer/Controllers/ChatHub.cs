@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using SignalRChatServer.Data;
+using SignalRChatServer.Models;
 using System.Security.Claims;
 
 namespace SignalRChatServer.Hubs
@@ -9,24 +11,53 @@ namespace SignalRChatServer.Hubs
     public class ChatHub : Hub
     {
         private readonly ILogger<ChatHub> _logger;
+        private readonly IMessageRepository _messageRepository;
 
-        public ChatHub(ILogger<ChatHub> logger)
+
+        public ChatHub(ILogger<ChatHub> logger, IMessageRepository messageRepository)
         {
             _logger = logger;
+            _messageRepository = messageRepository;
         }
 
         public override async Task OnConnectedAsync()
         {
-            var token = Context.GetHttpContext()?.Request.Query["access_token"];
-            Console.WriteLine($"Token received: {token}");
-
-            if (Context.User?.Identity?.IsAuthenticated != true)
+            try
             {
-                Context.Abort();
-                return;
-            }
+                var token = Context.GetHttpContext()?.Request.Query["access_token"];
+                Console.WriteLine($"Token received: {token}");
 
-            await base.OnConnectedAsync();
+                if (Context.User?.Identity?.IsAuthenticated != true)
+                {
+                    Context.Abort();
+                    return;
+                }
+
+                // Проверяем, что _messageRepository не null
+                if (_messageRepository == null)
+                {
+                    _logger.LogError("MessageRepository is not initialized");
+                    throw new InvalidOperationException("MessageRepository is not initialized");
+                }
+
+                // Отправляем историю сообщений новому клиенту
+                var recentMessages = await _messageRepository.GetRecentMessagesAsync();
+                foreach (var msg in recentMessages)
+                {
+                    await Clients.Caller.SendAsync("ReceiveMessage",
+                        msg.Sender,
+                        msg.Text,
+                        msg.Timestamp,
+                        msg.Timestamp.Date.ToString("yyyy-MM-dd"));
+                }
+
+                await base.OnConnectedAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in OnConnectedAsync");
+                throw; // Можно заменить на обработку ошибки, если нужно
+            }
         }
 
         public override async Task OnDisconnectedAsync(Exception? exception)
@@ -65,24 +96,29 @@ namespace SignalRChatServer.Hubs
 
             _logger.LogInformation($"User {username} (ID: {userId}) sent message: {message}");
 
-            try
-            {
-                await Clients.All.SendAsync("ReceiveMessage", username, message);
+            // Фиксируем время на сервере (UTC)
+            var timestamp = DateTime.UtcNow;
 
-                //await Clients.All.SendAsync("ReceiveMessage",
-                //    new
-                //    {
-                //        Sender = username,
-                //        Text = message,
-                //        Timestamp = DateTime.UtcNow,
-                //        IsSystemMessage = false
-                //    });
-            }
-            catch (Exception ex)
+            // Сохраняем сообщение в базу
+            var messageModel = new MessageModel
             {
-                _logger.LogError(ex, "Error sending message");
-                await Clients.Caller.SendAsync("ReceiveErrorMessage", "Failed to send message");
-            }
+                Sender = username,
+                Text = message,
+                Timestamp = timestamp,
+                IsSystemMessage = false
+            };
+
+            await _messageRepository.AddMessageAsync(messageModel);
+
+            // Отправляем всем с timestamp
+            await _messageRepository.AddMessageAsync(messageModel);
+
+            // Добавляем дату в отправляемые данные
+            await Clients.All.SendAsync("ReceiveMessage", 
+        username, 
+        message, 
+        timestamp,
+        timestamp.Date.ToString("yyyy-MM-dd"));
         }
 
         [Authorize(Roles = "Admin")]
@@ -97,6 +133,16 @@ namespace SignalRChatServer.Hubs
                     Timestamp = DateTime.UtcNow,
                     IsSystemMessage = true
                 });
+        }
+
+        [Authorize(Roles = "Admin")] // Только для администраторов
+        public async Task PurgeAllMessages()
+        {
+            // Полная очистка таблицы
+            await _messageRepository.PurgeAllMessagesAsync();
+
+            // Уведомляем всех клиентов
+            await Clients.All.SendAsync("OnMessagesPurged");
         }
 
         public async Task JoinGroup(string groupName)

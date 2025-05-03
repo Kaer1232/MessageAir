@@ -3,78 +3,158 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="МessageAir.VIew.ChatView"
              xmlns:models="clr-namespace:МessageAir.Models"
+             xmlns:viewModels="clr-namespace:МessageAir.ViewModels"
              xmlns:converters="clr-namespace:МessageAir.Converters"
              Title="ChatView">
 
     <ContentPage.Resources>
         <ResourceDictionary>
-            <converters:BoolToColorConverter x:Key="MessageColorConverter" 
-                TrueColor="#FF0084FF" FalseColor="#FFDDDDDD"/>
-            <converters:BoolToLayoutOptionsConverter x:Key="MessageAlignmentConverter"
-                TrueOption="End" FalseOption="Start"/>
-            <converters:BoolToTextAlignmentConverter x:Key="TextAlignmentConverter"
-                TrueOption="End" FalseOption="Start"/>
+            <!-- Конвертеры -->
+            <converters:DateTimeToDayStringConverter x:Key="FriendlyDateConverter"/>
+            <converters:InvertedBoolConverter x:Key="InvertedBoolConverter"/>
+
+            <!-- Стиль заголовка группы -->
+            <Style x:Key="GroupHeaderStyle" TargetType="Label">
+                <Setter Property="FontSize" Value="14"/>
+                <Setter Property="TextColor" Value="#666666"/>
+                <Setter Property="FontAttributes" Value="Bold"/>
+                <Setter Property="HorizontalOptions" Value="Center"/>
+                <Setter Property="Margin" Value="0,15,0,5"/>
+                <Setter Property="BackgroundColor" Value="#F5F5F5"/>
+                <Setter Property="Padding" Value="10,5"/>
+            </Style>
+
+            <!-- В ресурсах добавьте новый стиль для контейнера даты -->
+            <Style x:Key="DateContainerStyle" TargetType="Frame">
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="BackgroundColor" Value="Transparent"/>
+                <Setter Property="HasShadow" Value="False"/>
+                <Setter Property="HorizontalOptions" Value="Center"/>
+                <Setter Property="Margin" Value="0,15,0,5"/>
+            </Style>
+
+            <!-- Стиль своих сообщений -->
+            <Style x:Key="CurrentUserMessageStyle" TargetType="Frame">
+                <Setter Property="CornerRadius" Value="12"/>
+                <Setter Property="BackgroundColor" Value="#0084FF"/>
+                <Setter Property="Padding" Value="12,8"/>
+                <Setter Property="HorizontalOptions" Value="End"/>
+                <Setter Property="Margin" Value="40,4,12,4"/>
+            </Style>
+
+            <!-- Стиль чужих сообщений -->
+            <Style x:Key="OtherUserMessageStyle" TargetType="Frame">
+                <Setter Property="CornerRadius" Value="12"/>
+                <Setter Property="BackgroundColor" Value="#FFFFFF"/>
+                <Setter Property="Padding" Value="12,8"/>
+                <Setter Property="HorizontalOptions" Value="Start"/>
+                <Setter Property="Margin" Value="12,4,40,4"/>
+            </Style>
         </ResourceDictionary>
     </ContentPage.Resources>
 
-    <Grid RowDefinitions="*,Auto,Auto">
-        <!-- Messages List -->
-        <CollectionView ItemsSource="{Binding Messages}"
-                       Grid.Row="0"
-                       VerticalScrollBarVisibility="Always">
+    <Grid RowDefinitions="*,Auto,Auto" BackgroundColor="#F9F9F9">
+        <!-- Основной список сообщений -->
+        <CollectionView x:Name="MessagesCollectionView"
+               ItemsSource="{Binding GroupedMessages}"
+               IsGrouped="True"
+               SelectionMode="None"
+               VerticalScrollBarVisibility="Always"
+               EmptyView="No messages yet"
+               ItemsUpdatingScrollMode="KeepLastItemInView">
+
+            <!-- Шаблон заголовка группы -->
+            <CollectionView.GroupHeaderTemplate>
+                <DataTemplate>
+                    <VerticalStackLayout Spacing="0" HorizontalOptions="Center" Margin="0,15,0,5">
+                        <Label Text="{Binding Date, Converter={StaticResource FriendlyDateConverter}}" 
+                   FontSize="14"
+                   TextColor="#666666"
+                   FontAttributes="Bold"
+                   HorizontalOptions="Center"/>
+
+                        <!-- Полоска под датой -->
+                        <BoxView HeightRequest="3" 
+                     Color="#E0E0E0"
+                     HorizontalOptions="Fill"
+                     Margin="0,5,0,0"/>
+                    </VerticalStackLayout>
+                </DataTemplate>
+            </CollectionView.GroupHeaderTemplate>
+
+            <!-- Шаблон сообщения -->
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:MessageModel">
-                    <Frame Padding="10" 
-                           Margin="5"
-                           CornerRadius="10"
-                           HorizontalOptions="{Binding IsCurrentUser, 
-                               Converter={StaticResource MessageAlignmentConverter}}"
-                           BackgroundColor="{Binding IsCurrentUser, 
-                               Converter={StaticResource MessageColorConverter}}">
-                        <VerticalStackLayout>
-                            <Label Text="{Binding User}" 
-                                   FontAttributes="Bold"
-                                   HorizontalOptions="Fill"
-                                   HorizontalTextAlignment="{Binding IsCurrentUser, 
-                                       Converter={StaticResource TextAlignmentConverter}}"/>
-                            <Label Text="{Binding Text}"
-                                   HorizontalOptions="Fill"
-                                   HorizontalTextAlignment="{Binding IsCurrentUser, 
-                                       Converter={StaticResource TextAlignmentConverter}}"/>
-                            <Label Text="{Binding Timestamp, StringFormat='{0:HH:mm}'}"
-                                   FontSize="Micro"
-                                   HorizontalOptions="Fill"
-                                   HorizontalTextAlignment="{Binding IsCurrentUser, 
-                                       Converter={StaticResource TextAlignmentConverter}}"/>
-                        </VerticalStackLayout>
-                    </Frame>
+                    <Grid>
+                        <!-- Свои сообщения -->
+                        <Frame Style="{StaticResource CurrentUserMessageStyle}"
+                               IsVisible="{Binding IsCurrentUser}">
+                            <VerticalStackLayout Spacing="4">
+                                <Label Text="{Binding Text}"
+                                       FontSize="16"
+                                       TextColor="White"/>
+                                <Label Text="{Binding Timestamp, StringFormat='{0:HH:mm}'}"
+                                       FontSize="12"
+                                       HorizontalOptions="End"
+                                       TextColor="#A0D6FF"/>
+                            </VerticalStackLayout>
+                        </Frame>
+
+                        <!-- Чужие сообщения -->
+                        <Frame Style="{StaticResource OtherUserMessageStyle}"
+                               IsVisible="{Binding IsCurrentUser, Converter={StaticResource InvertedBoolConverter}}">
+                            <VerticalStackLayout Spacing="4">
+                                <Label Text="{Binding Sender}" 
+                                       FontAttributes="Bold"
+                                       FontSize="14"
+                                       TextColor="#333333"/>
+                                <Label Text="{Binding Text}"
+                                       FontSize="16"
+                                       TextColor="#333333"/>
+                                <Label Text="{Binding Timestamp, StringFormat='{0:HH:mm}'}"
+                                       FontSize="12"
+                                       HorizontalOptions="End"
+                                       TextColor="#666666"/>
+                            </VerticalStackLayout>
+                        </Frame>
+                    </Grid>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>
 
-        <!-- Status -->
+        <!-- Статус подключения -->
         <Label Text="{Binding Status}"
                Grid.Row="1"
                HorizontalOptions="Center"
-               Margin="0,5"/>
+               Margin="0,5"
+               FontSize="12"
+               TextColor="#666666"/>
 
-        <!-- Message Input -->
+        <!-- Панель ввода -->
         <Grid ColumnDefinitions="*,Auto"
-              Padding="10"
-              Grid.Row="2">
+              Padding="10,5"
+              Grid.Row="2"
+              BackgroundColor="#FFFFFF">
             <Entry Text="{Binding Message}"
-                   Placeholder="Type your message..."
-                   Grid.Column="0"/>
+                   TextColor="Black"
+                   Placeholder="Введите сообщение"
+                   Grid.Column="0"
+                   FontSize="16"
+                   ClearButtonVisibility="WhileEditing"
+                   ReturnCommand="{Binding SendMessageCommand}"/>
             <Button Text="Send"
                     Command="{Binding SendMessageCommand}"
                     Grid.Column="1"
                     Margin="10,0,0,0"
-                    WidthRequest="80"/>
+                    WidthRequest="80"
+                    BackgroundColor="#0084FF"
+                    TextColor="White"
+                    CornerRadius="5"/>
         </Grid>
     </Grid>
 
     <ContentPage.ToolbarItems>
         <ToolbarItem Text="Disconnect" Command="{Binding DisconnectCommand}"/>
-        <ToolbarItem IconImageSource="user.png" Command="{Binding GoToProfileCommand}"/>
+        <ToolbarItem Text="GoToProfile" Command="{Binding GoToProfileCommand}"/>
     </ContentPage.ToolbarItems>
 </ContentPage>

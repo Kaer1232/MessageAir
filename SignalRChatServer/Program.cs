@@ -21,7 +21,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 // Services
 builder.Services.AddScoped<IUserRepository, UserRepository>();
-//builder.Services.AddScoped<IMessageRepository, MessageRepository>();
+builder.Services.AddScoped<IMessageRepository, MessageRepository>();
 builder.Services.AddSingleton<IAuthService, AuthService>();
 
 // CORS
@@ -96,17 +96,40 @@ app.UseAuthorization();
 
 app.UseWebSockets();
 
+#region CreateData
+//using (var scope = app.Services.CreateScope())
+//{
+//    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+//    // Принудительное создание таблицы если её нет
+//    try
+//    {
+//        await db.Database.ExecuteSqlRawAsync(@"
+//            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Messages')
+//            BEGIN
+//                CREATE TABLE [Messages] (
+//                    [Id] int NOT NULL IDENTITY,
+//                    [Sender] nvarchar(max) NOT NULL,
+//                    [Text] nvarchar(max) NOT NULL,
+//                    [Timestamp] datetime2 NOT NULL,
+//                    [IsSystemMessage] bit NOT NULL,
+//                    CONSTRAINT [PK_Messages] PRIMARY KEY ([Id])
+//                )
+//                PRINT 'Таблица Messages создана'
+//            END
+//        ");
+//    }
+//    catch (Exception ex)
+//    {
+//        Console.WriteLine($"Ошибка при создании таблицы: {ex.Message}");
+//    }
+//}
+#endregion
+
 app.UseEndpoints(endpoints =>
 {
     endpoints.MapControllers();
     endpoints.MapHub<ChatHub>("/chatHub");
 });
-
-// Database initialization
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await db.Database.MigrateAsync();
-}
 
 app.Run();

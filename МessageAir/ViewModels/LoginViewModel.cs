@@ -68,7 +68,9 @@ namespace МessageAir.ViewModels
 
                 if (await _authService.LoginAsync(Username, Password))
                 {
-                    await Shell.Current.GoToAsync("//ChatView");
+                    Username = null;
+                    Password = null;
+                    await Shell.Current.GoToAsync($"//ChatView");
                 }
                 else
                 {

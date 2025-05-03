@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.SignalR.Client;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using МessageAir.Models;
 using МessageAir.Services;
 
@@ -17,7 +18,6 @@ namespace МessageAir.ViewModels
 
         [ObservableProperty]
         private string _message;
-
         [ObservableProperty]
         private ObservableCollection<MessageModel> _messages = new();
 
@@ -34,52 +34,44 @@ namespace МessageAir.ViewModels
         {
             _authService = authService;
             InitializeConnection();
+            ScrollToBottom?.Invoke();
+
+            Debug.WriteLine($"Current username: {_authService.Username}");
         }
 
-        private async void InitializeConnection()
+        public async void InitializeConnection()
         {
             if (_hubConnection != null)
             {
                 await _hubConnection.DisposeAsync();
             }
             _hubConnection = new HubConnectionBuilder()
-                .WithUrl("http://localhost:5273/chatHub", options =>
-                {
-                    options.AccessTokenProvider = async () => await SecureStorage.GetAsync("jwt_token");
-                    options.SkipNegotiation = true;
-                    options.Transports = HttpTransportType.WebSockets;
-                })
-                .WithAutomaticReconnect()
-                .Build();
+            .WithUrl("http://localhost:5273/chatHub", options =>
+            {
+                options.AccessTokenProvider = async () => await SecureStorage.GetAsync("jwt_token");
+                options.SkipNegotiation = true;
+                options.Transports = HttpTransportType.WebSockets;
+            })
+            .WithAutomaticReconnect()
+            .Build();
 
-            _hubConnection.On<IEnumerable<MessageModel>>("ReceiveMessageHistory", messages =>
+
+            _hubConnection.On<string, string, DateTime, string>("ReceiveMessage", (sender, message, timestamp, dateGroup) =>
             {
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
-                    foreach (var msg in messages)
-                    {
-                        Messages.Add(new MessageModel
-                        {
-                            User = msg.Sender,
-                            Text = msg.Text,
-                            Timestamp = msg.Timestamp,
-                            IsCurrentUser = msg.Sender == _authService.Username
-                        });
-                    }
-                });
-            });
+                    var localTime = timestamp.ToLocalTime();
 
-            _hubConnection.On<MessageModel>("ReceiveMessage", msg =>
-            {
-                MainThread.BeginInvokeOnMainThread(() =>
-                {
                     Messages.Add(new MessageModel
                     {
-                        User = msg.Sender,
-                        Text = msg.Text,
-                        Timestamp = msg.Timestamp,
-                        IsCurrentUser = msg.Sender == _authService.Username
+                        Sender = sender,
+                        Text = message,
+                        Timestamp = localTime,
+                        IsCurrentUser = sender == _authService.Username
+                        // DateGroup теперь вычисляется автоматически
                     });
+
+                    OnPropertyChanged(nameof(GroupedMessages));
                 });
             });
 
@@ -110,17 +102,63 @@ namespace МessageAir.ViewModels
             }
         }
 
+        public ObservableCollection<MessageGroup> GroupedMessages
+        {
+            get
+            {
+                var grouped = Messages
+            .GroupBy(m => m.Timestamp.Date)
+            .Select(g => new MessageGroup(
+                g.Key.ToString("dd MMMM yyyy", CultureInfo.CurrentCulture),
+                g.Key,
+                g.OrderBy(m => m.Timestamp).ToList())) // Сообщения внутри группы - новые сверху
+            .OrderBy(g => g.SortableDate) // Группы дат - старые сверху
+            .ToList();
+
+                return new ObservableCollection<MessageGroup>(grouped);
+            }
+        }
+
+
+        [RelayCommand]
+        private async Task NuclearPurge()
+        {
+            try
+            {
+                // 1. Очищаем локальные сообщения
+                Messages.Clear();
+
+                // 2. Отправляем команду на сервер
+                await _hubConnection.InvokeAsync("PurgeAllMessages");
+
+                // 3. Получаем подтверждение
+                _hubConnection.On("OnMessagesPurged", () =>
+                {
+                    MainThread.BeginInvokeOnMainThread(() =>
+                    {
+                        Messages.Clear();
+                        Status = "Все сообщения уничтожены";
+                    });
+                });
+            }
+            catch (Exception ex)
+            {
+                Status = $"Ядерный удар не удался: {ex.Message}";
+            }
+        }
+
         private void ConfigureHubEvents()
         {
-            _hubConnection.On<string, string>("ReceiveMessage", (user, msg) =>
+            _hubConnection.On<string, string>("ReceiveMessage", (sender, message) =>
             {
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
                     Messages.Add(new MessageModel
                     {
-                        User = user,
-                        Text = msg,
-                        Timestamp = DateTime.Now
+                        Sender = sender,
+                        Text = message,
+                        Timestamp = DateTime.Now,
+                        IsCurrentUser = sender == _authService.Username
                     });
                 });
             });
@@ -194,6 +232,7 @@ namespace МessageAir.ViewModels
         [RelayCommand(CanExecute = nameof(CanSendMessage))]
         private async Task SendMessage()
         {
+            Messages.Clear();
             if (string.IsNullOrWhiteSpace(Message)) return;
 
             // Проверяем соединение
@@ -207,6 +246,7 @@ namespace МessageAir.ViewModels
             {
                 await _hubConnection.InvokeAsync("SendMessage", Message);
                 Status = string.Empty;
+                ScrollToBottom?.Invoke();
             }
             catch (Exception ex)
             {
@@ -215,6 +255,8 @@ namespace МessageAir.ViewModels
                 await Reconnect();
             }
         }
+        public Action ScrollToBottom { get; set; }
+
 
         private async Task Reconnect()
         {
@@ -232,6 +274,7 @@ namespace МessageAir.ViewModels
         [RelayCommand]
         private async Task Disconnect()
         {
+            Debug.WriteLine($"Before disconnect - Username: {_authService?.Username}");
             try
             {
                 if (_hubConnection != null)
@@ -241,14 +284,26 @@ namespace МessageAir.ViewModels
                     _hubConnection = null;
                 }
 
-                await _authService.LogoutAsync();
+                Messages.Clear();
+                Message = null;
 
-                await Shell.Current.GoToAsync("//LoginView");
+                // Добавляем проверку на null и await
+                if (_authService != null)
+                {
+                    await _authService.LogoutAsync();
+                    Debug.WriteLine($"Username after logout: {_authService.Username}"); // Должно быть null
+                }
+
+                // Перенаправляем на страницу логина
+                await Shell.Current.GoToAsync("//LoginView", animate: true);
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"Disconnect error: {ex.Message}");
+                // Можно добавить отображение ошибки пользователю
+                await Shell.Current.DisplayAlert("Ошибка", "Не удалось выйти", "OK");
             }
+            Debug.WriteLine($"After disconnect - Username: {_authService?.Username}");
         }
 
         private bool CanSendMessage() => !string.IsNullOrWhiteSpace(Message) && IsConnected;

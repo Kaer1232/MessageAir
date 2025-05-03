@@ -35,6 +35,8 @@ namespace МessageAir.Services
                 {
                     var result = await response.Content.ReadFromJsonAsync<AuthResult>();
                     Console.WriteLine($"Token received: {result.Token}"); // Логирование
+                    Username = username;
+                    await SecureStorage.SetAsync("username", username);
                     await SecureStorage.SetAsync("jwt_token", result.Token);
                     return true;
                 }
@@ -48,6 +50,7 @@ namespace МessageAir.Services
 
         public async Task InitializeAsync()
         {
+            Username = await SecureStorage.GetAsync("username");
             Token = await SecureStorage.Default.GetAsync(AuthTokenKey);
             if (!string.IsNullOrEmpty(Token))
             {
@@ -62,6 +65,7 @@ namespace МessageAir.Services
         {
             Token = null;
             Username = null;
+            SecureStorage.Remove("username");
             SecureStorage.Default.Remove(AuthTokenKey);
             _httpClient.DefaultRequestHeaders.Authorization = null;
         }

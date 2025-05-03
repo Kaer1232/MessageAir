@@ -2,7 +2,7 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="МessageAir.VIew.LoginView"
-             xmlns:vm="clr-namespace:MessageAir.ViewModels"
+             xmlns:vm="clr-namespace:МessageAir.ViewModels"
              xmlns:converters="clr-namespace:МessageAir.Converters"
              Title="LoginView">
 

@@ -11,6 +11,7 @@ namespace SignalRChatServer.Data
         }
 
         public DbSet<UserModel> Users { get; set; }
+        public DbSet<MessageModel> Messages { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -18,6 +19,13 @@ namespace SignalRChatServer.Data
             {
                 entity.HasIndex(u => u.Username).IsUnique();
                 entity.Property(u => u.CreatedAt)
+                    .HasDefaultValueSql("GETUTCDATE()");
+            });
+
+            modelBuilder.Entity<MessageModel>(entity =>
+            {
+                entity.HasKey(m => m.Id);
+                entity.Property(m => m.Timestamp)
                     .HasDefaultValueSql("GETUTCDATE()");
             });
         }

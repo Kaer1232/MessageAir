@@ -44,6 +44,10 @@ namespace МessageAir
             builder.Services.AddTransient<LoginView>();
             builder.Services.AddTransient<ChatView>();
 
+            builder.Services
+    .AddSingleton<IAuthService, AuthService>()
+    .AddTransient<ChatViewModel>();
+
             builder.Services.AddSingleton<AppShell>();
 
 #if DEBUG
