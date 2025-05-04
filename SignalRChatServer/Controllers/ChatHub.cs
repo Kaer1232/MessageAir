@@ -1,8 +1,11 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using SignalRChatServer.Data;
 using SignalRChatServer.Models;
+using System.Collections.Concurrent;
 using System.Security.Claims;
 
 namespace SignalRChatServer.Hubs
@@ -12,6 +15,7 @@ namespace SignalRChatServer.Hubs
     {
         private readonly ILogger<ChatHub> _logger;
         private readonly IMessageRepository _messageRepository;
+        private static readonly ConcurrentDictionary<string, FileTransfer> _fileTransfers = new();
 
 
         public ChatHub(ILogger<ChatHub> logger, IMessageRepository messageRepository)
@@ -24,39 +28,40 @@ namespace SignalRChatServer.Hubs
         {
             try
             {
-                var token = Context.GetHttpContext()?.Request.Query["access_token"];
-                Console.WriteLine($"Token received: {token}");
-
-                if (Context.User?.Identity?.IsAuthenticated != true)
-                {
-                    Context.Abort();
-                    return;
-                }
-
-                // Проверяем, что _messageRepository не null
-                if (_messageRepository == null)
-                {
-                    _logger.LogError("MessageRepository is not initialized");
-                    throw new InvalidOperationException("MessageRepository is not initialized");
-                }
-
-                // Отправляем историю сообщений новому клиенту
                 var recentMessages = await _messageRepository.GetRecentMessagesAsync();
+
                 foreach (var msg in recentMessages)
                 {
-                    await Clients.Caller.SendAsync("ReceiveMessage",
-                        msg.Sender,
-                        msg.Text,
-                        msg.Timestamp,
-                        msg.Timestamp.Date.ToString("yyyy-MM-dd"));
+                    try
+                    {
+                        if (msg.HasFile)
+                        {
+                            await Clients.Caller.SendAsync("ReceiveFileMessage",
+                                msg.Sender,
+                                msg.FileName ?? string.Empty,
+                                msg.FileData ?? Array.Empty<byte>(),
+                                msg.FileType ?? string.Empty,
+                                msg.Timestamp);
+                        }
+                        else
+                        {
+                            await Clients.Caller.SendAsync("ReceiveMessage",
+                                msg.Sender,
+                                msg.Text ?? string.Empty,
+                                msg.Timestamp,
+                                msg.Timestamp.Date.ToString("yyyy-MM-dd"));
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error sending message to client");
+                    }
                 }
-
-                await base.OnConnectedAsync();
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error in OnConnectedAsync");
-                throw; // Можно заменить на обработку ошибки, если нужно
+                throw;
             }
         }
 
@@ -121,6 +126,61 @@ namespace SignalRChatServer.Hubs
         timestamp.Date.ToString("yyyy-MM-dd"));
         }
 
+        public async Task StartFileTransfer(string fileName, long fileSize, string contentType)
+        {
+            // Создаем новую передачу файла
+            var transfer = new FileTransfer
+            {
+                FileName = fileName,
+                FileSize = fileSize,
+                ContentType = contentType,
+                Stream = new MemoryStream()
+            };
+
+            _fileTransfers[Context.ConnectionId] = transfer;
+            await Clients.Caller.SendAsync("FileTransferStarted");
+        }
+
+        public async Task SendFileChunk(byte[] chunk)
+        {
+            if (_fileTransfers.TryGetValue(Context.ConnectionId, out var transfer))
+            {
+                await transfer.Stream.WriteAsync(chunk, 0, chunk.Length);
+                transfer.BytesReceived += chunk.Length;
+
+                // Отправляем прогресс (опционально)
+                var progress = (double)transfer.BytesReceived / transfer.FileSize * 100;
+                await Clients.Caller.SendAsync("FileTransferProgress", progress);
+            }
+        }
+
+        public async Task CompleteFileTransfer()
+        {
+            if (_fileTransfers.TryRemove(Context.ConnectionId, out var transfer))
+            {
+                try
+                {
+                    var fileData = transfer.Stream.ToArray();
+                    await _messageRepository.AddFileMessageAsync(
+                        Context.User?.Identity?.Name ?? "Anonymous",
+                        transfer.FileName,
+                        fileData,
+                        transfer.ContentType);
+
+                    await Clients.All.SendAsync("ReceiveFileMessage",
+                        Context.User?.Identity?.Name,
+                        transfer.FileName,
+                        fileData,
+                        transfer.ContentType,
+                        DateTime.UtcNow);
+                }
+                finally
+                {
+                    transfer.Stream.Dispose();
+                }
+            }
+        }
+
         [Authorize(Roles = "Admin")]
         public async Task SendAdminMessage(string message)
         {
@@ -162,5 +222,14 @@ namespace SignalRChatServer.Hubs
                 $"{username} has left the group {groupName}");
             _logger.LogInformation($"User {username} left group {groupName}");
         }
+    }
+
+    public class FileTransfer
+    {
+        public string FileName { get; set; }
+        public long FileSize { get; set; }
+        public string ContentType { get; set; }
+        public MemoryStream Stream { get; set; }
+        public long BytesReceived { get; set; }
     }
 }

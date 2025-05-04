@@ -12,6 +12,24 @@
             <!-- Конвертеры -->
             <converters:DateTimeToDayStringConverter x:Key="FriendlyDateConverter"/>
             <converters:InvertedBoolConverter x:Key="InvertedBoolConverter"/>
+            <converters:FileSizeConverter x:Key="FileMessageStyle"/>
+            <converters:AndMultiValueConverter x:Key="AndConverter" />
+
+            <Style x:Key="MyFileMessageStyle" TargetType="Frame">
+                <Setter Property="CornerRadius" Value="12"/>
+                <Setter Property="BackgroundColor" Value="#0084FF"/>
+                <Setter Property="Padding" Value="12,8"/>
+                <Setter Property="HorizontalOptions" Value="End"/>
+                <Setter Property="Margin" Value="40,4,12,4"/>
+            </Style>
+
+            <Style x:Key="OtherFileMessageStyle" TargetType="Frame">
+                <Setter Property="CornerRadius" Value="12"/>
+                <Setter Property="BackgroundColor" Value="#FFFFFF"/>
+                <Setter Property="Padding" Value="12,8"/>
+                <Setter Property="HorizontalOptions" Value="Start"/>
+                <Setter Property="Margin" Value="12,4,40,4"/>
+            </Style>
 
             <!-- Стиль заголовка группы -->
             <Style x:Key="GroupHeaderStyle" TargetType="Label">
@@ -23,6 +41,7 @@
                 <Setter Property="BackgroundColor" Value="#F5F5F5"/>
                 <Setter Property="Padding" Value="10,5"/>
             </Style>
+
 
             <!-- В ресурсах добавьте новый стиль для контейнера даты -->
             <Style x:Key="DateContainerStyle" TargetType="Frame">
@@ -86,36 +105,89 @@
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:MessageModel">
                     <Grid>
-                        <!-- Свои сообщения -->
-                        <Frame Style="{StaticResource CurrentUserMessageStyle}"
-                               IsVisible="{Binding IsCurrentUser}">
+                        <!-- Текстовое сообщение текущего пользователя -->
+                        <Frame Style="{StaticResource CurrentUserMessageStyle}">
+                            <Frame.IsVisible>
+                                <MultiBinding Converter="{StaticResource AndConverter}">
+                                    <Binding Path="IsCurrentUser" Mode="OneWay" FallbackValue="False"/>
+                                    <Binding Path="HasFile" Converter="{StaticResource InvertedBoolConverter}" Mode="OneWay" FallbackValue="False"/>
+                                </MultiBinding>
+                            </Frame.IsVisible>
                             <VerticalStackLayout Spacing="4">
-                                <Label Text="{Binding Text}"
-                                       FontSize="16"
-                                       TextColor="White"/>
+                                <Label Text="{Binding Text}" FontSize="16" TextColor="White"/>
                                 <Label Text="{Binding Timestamp, StringFormat='{0:HH:mm}'}"
-                                       FontSize="12"
-                                       HorizontalOptions="End"
-                                       TextColor="#A0D6FF"/>
+                           FontSize="12" HorizontalOptions="End" TextColor="#A0D6FF"/>
                             </VerticalStackLayout>
                         </Frame>
 
-                        <!-- Чужие сообщения -->
-                        <Frame Style="{StaticResource OtherUserMessageStyle}"
-                               IsVisible="{Binding IsCurrentUser, Converter={StaticResource InvertedBoolConverter}}">
+                        <!-- Текстовое сообщение другого пользователя -->
+                        <Frame Style="{StaticResource OtherUserMessageStyle}">
+                            <Frame.IsVisible>
+                                <MultiBinding Converter="{StaticResource AndConverter}">
+                                    <Binding Path="IsCurrentUser" Converter="{StaticResource InvertedBoolConverter}" />
+                                    <Binding Path="HasFile" Converter="{StaticResource InvertedBoolConverter}" />
+                                </MultiBinding>
+                            </Frame.IsVisible>
                             <VerticalStackLayout Spacing="4">
-                                <Label Text="{Binding Sender}" 
-                                       FontAttributes="Bold"
-                                       FontSize="14"
-                                       TextColor="#333333"/>
-                                <Label Text="{Binding Text}"
-                                       FontSize="16"
-                                       TextColor="#333333"/>
+                                <Label Text="{Binding Sender}" FontAttributes="Bold" FontSize="14" TextColor="#333333"/>
+                                <Label Text="{Binding Text}" FontSize="16" TextColor="#333333"/>
                                 <Label Text="{Binding Timestamp, StringFormat='{0:HH:mm}'}"
-                                       FontSize="12"
-                                       HorizontalOptions="End"
-                                       TextColor="#666666"/>
+                           FontSize="12" HorizontalOptions="End" TextColor="#666666"/>
                             </VerticalStackLayout>
+                        </Frame>
+
+                        <!-- Файловое сообщение текущего пользователя -->
+                        <Frame Style="{StaticResource MyFileMessageStyle}">
+                            <Frame.IsVisible>
+                                <MultiBinding Converter="{StaticResource AndConverter}">
+                                    <Binding Path="IsCurrentUser" />
+                                    <Binding Path="HasFile" />
+                                </MultiBinding>
+                            </Frame.IsVisible>
+                            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" Padding="10">
+                                <Label Text="📄" Grid.Column="0" Grid.RowSpan="3" FontSize="24"
+                           VerticalOptions="Center" Margin="0,0,10,0" TextColor="White"/>
+                                <Label Text="{Binding FileName}" Grid.Column="1" Grid.Row="1"
+                           FontAttributes="Bold" LineBreakMode="TailTruncation" TextColor="White"/>
+                                <HorizontalStackLayout Grid.Column="1" Grid.Row="2" Spacing="10">
+                                    <Label Text="{Binding FileData, Converter={StaticResource FileMessageStyle}}"
+                               FontSize="12" TextColor="#A0D6FF"/>
+                                    <Label Text="{Binding Timestamp, StringFormat='{0:HH:mm}'}"
+                               FontSize="12" TextColor="#A0D6FF"/>
+                                </HorizontalStackLayout>
+                                <Button Text="🔻" Grid.Column="1" Grid.Row="2" HorizontalOptions="End"
+                            Command="{Binding Source={RelativeSource AncestorType={x:Type viewModels:ChatViewModel}}, Path=DownloadFileCommand}"
+                            CommandParameter="{Binding .}" BackgroundColor="Transparent"
+                            Padding="0" WidthRequest="30"/>
+                            </Grid>
+                        </Frame>
+
+                        <!-- Файловое сообщение другого пользователя -->
+                        <Frame Style="{StaticResource OtherFileMessageStyle}">
+                            <Frame.IsVisible>
+                                <MultiBinding Converter="{StaticResource AndConverter}">
+                                    <Binding Path="IsCurrentUser" Converter="{StaticResource InvertedBoolConverter}" />
+                                    <Binding Path="HasFile" />
+                                </MultiBinding>
+                            </Frame.IsVisible>
+                            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" Padding="10">
+                                <Label Text="📄" Grid.Column="0" Grid.RowSpan="3" FontSize="24"
+                           VerticalOptions="Center" Margin="0,0,10,0" TextColor="#333333"/>
+                                <Label Text="{Binding Sender}" Grid.Column="1" Grid.Row="0"
+                           FontAttributes="Bold" TextColor="#333333"/>
+                                <Label Text="{Binding FileName}" Grid.Column="1" Grid.Row="1"
+                           FontAttributes="Bold" LineBreakMode="TailTruncation" TextColor="#333333"/>
+                                <HorizontalStackLayout Grid.Column="1" Grid.Row="2" Spacing="10">
+                                    <Label Text="{Binding FileData, Converter={StaticResource FileMessageStyle}}"
+                               FontSize="12" TextColor="#666666"/>
+                                    <Label Text="{Binding Timestamp, StringFormat='{0:HH:mm}'}"
+                               FontSize="12" TextColor="#666666"/>
+                                </HorizontalStackLayout>
+                                <Button Text="🔻" Grid.Column="1" Grid.Row="2" HorizontalOptions="End"
+                            Command="{Binding Source={RelativeSource AncestorType={x:Type viewModels:ChatViewModel}}, Path=DownloadFileCommand}"
+                            CommandParameter="{Binding .}" BackgroundColor="Transparent"
+                            Padding="0" WidthRequest="30"/>
+                            </Grid>
                         </Frame>
                     </Grid>
                 </DataTemplate>
@@ -131,25 +203,39 @@
                TextColor="#666666"/>
 
         <!-- Панель ввода -->
-        <Grid ColumnDefinitions="*,Auto"
+        <Grid ColumnDefinitions="*,Auto,Auto"
               Padding="10,5"
               Grid.Row="2"
-              BackgroundColor="#FFFFFF">
+              BackgroundColor="#FFFFFF"
+              ColumnSpacing="10">
+            <!-- Поле ввода -->
             <Entry Text="{Binding Message}"
-                   TextColor="Black"
-                   Placeholder="Введите сообщение"
                    Grid.Column="0"
+                   Placeholder="Введите сообщение..."
                    FontSize="16"
                    ClearButtonVisibility="WhileEditing"
-                   ReturnCommand="{Binding SendMessageCommand}"/>
-            <Button Text="Send"
+                   ReturnCommand="{Binding SendMessageCommand}"
+                   VerticalOptions="Center"/>
+
+            <!-- Кнопка прикрепления файла -->
+            <Button Grid.Column="1"
+                    Text="📎"
+                    Command="{Binding PickAndSendFileCommand}"
+                    WidthRequest="50"
+                    BackgroundColor="Transparent"
+                    TextColor="#0084FF"
+                    FontSize="20"
+                    CornerRadius="25"/>
+
+            <!-- Кнопка отправки -->
+            <Button Grid.Column="2"
+                    Text="Отпр."
                     Command="{Binding SendMessageCommand}"
-                    Grid.Column="1"
-                    Margin="10,0,0,0"
                     WidthRequest="80"
                     BackgroundColor="#0084FF"
                     TextColor="White"
-                    CornerRadius="5"/>
+                    CornerRadius="5"
+                    FontSize="14"/>
         </Grid>
     </Grid>
 

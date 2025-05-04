@@ -22,5 +22,6 @@ namespace SignalRChatServer.Models
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public DateTime? LastLogin { get; set; }
+
     }
 }

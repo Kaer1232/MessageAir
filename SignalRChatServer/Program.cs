@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+Ôªøusing Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -84,6 +84,8 @@ builder.Services.AddSignalR(options =>
     options.EnableDetailedErrors = true;
     options.ClientTimeoutInterval = TimeSpan.FromMinutes(2);
     options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+    options.MaximumReceiveMessageSize = 10 * 1024 * 1024; // 10MB
+    options.StreamBufferCapacity = 10;
 });
 
 var app = builder.Build();
@@ -97,33 +99,28 @@ app.UseAuthorization();
 app.UseWebSockets();
 
 #region CreateData
-//using (var scope = app.Services.CreateScope())
-//{
-//    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-//    // œËÌÛ‰ËÚÂÎ¸ÌÓÂ ÒÓÁ‰‡ÌËÂ Ú‡·ÎËˆ˚ ÂÒÎË Â∏ ÌÂÚ
-//    try
-//    {
-//        await db.Database.ExecuteSqlRawAsync(@"
-//            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Messages')
-//            BEGIN
-//                CREATE TABLE [Messages] (
-//                    [Id] int NOT NULL IDENTITY,
-//                    [Sender] nvarchar(max) NOT NULL,
-//                    [Text] nvarchar(max) NOT NULL,
-//                    [Timestamp] datetime2 NOT NULL,
-//                    [IsSystemMessage] bit NOT NULL,
-//                    CONSTRAINT [PK_Messages] PRIMARY KEY ([Id])
-//                )
-//                PRINT '“‡·ÎËˆ‡ Messages ÒÓÁ‰‡Ì‡'
-//            END
-//        ");
-//    }
-//    catch (Exception ex)
-//    {
-//        Console.WriteLine($"Œ¯Ë·Í‡ ÔË ÒÓÁ‰‡ÌËË Ú‡·ÎËˆ˚: {ex.Message}");
-//    }
-//}
+    try
+    {
+        await db.Database.ExecuteSqlRawAsync(@"
+            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Messages') AND name = 'FileData')
+            BEGIN
+                ALTER TABLE [Messages] ADD 
+                    [FileData] varbinary(max) NULL,
+                    [FileName] nvarchar(max) NULL,
+                    [FileType] nvarchar(max) NULL
+                PRINT 'Columns added to Messages table'
+            END
+        ");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error altering table: {ex.Message}");
+    }
+}
 #endregion
 
 app.UseEndpoints(endpoints =>
@@ -132,4 +129,21 @@ app.UseEndpoints(endpoints =>
     endpoints.MapHub<ChatHub>("/chatHub");
 });
 
+#region DeleteMessageModel
+//using (var scope = app.Services.CreateScope())
+//{
+//    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+//    try
+//    {
+//        Console.WriteLine("–ê–≤—Ç–æ–º–∞—Ç–∏—á–µ—Å–∫–∞—è –æ—á–∏—Å—Ç–∫–∞ —Å–æ–æ–±—â–µ–Ω–∏–π...");
+//        int deletedCount = await db.Messages.ExecuteDeleteAsync();
+//        Console.WriteLine($"–£–¥–∞–ª–µ–Ω–æ {deletedCount} —Å–æ–æ–±—â–µ–Ω–∏–π. –≠—Ç–æ—Ç –∫–æ–¥ –º–æ–∂–Ω–æ —É–¥–∞–ª—è—Ç—å.");
+//    }
+//    catch (Exception ex)
+//    {
+//        Console.WriteLine($"–û—à–∏–±–∫–∞ –ø—Ä–∏ –æ—á–∏—Å—Ç–∫–µ: {ex.Message}");
+//    }
+//}
+#endregion
 app.Run();

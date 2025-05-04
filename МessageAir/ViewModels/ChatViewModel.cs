@@ -51,6 +51,8 @@ namespace МessageAir.ViewModels
                 options.AccessTokenProvider = async () => await SecureStorage.GetAsync("jwt_token");
                 options.SkipNegotiation = true;
                 options.Transports = HttpTransportType.WebSockets;
+                options.HttpMessageHandlerFactory = handler =>
+            new HttpClientHandler { MaxRequestContentBufferSize = 10 * 1024 * 1024 }; // 10MB
             })
             .WithAutomaticReconnect()
             .Build();
@@ -60,20 +62,55 @@ namespace МessageAir.ViewModels
             {
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
-                    var localTime = timestamp.ToLocalTime();
-
-                    Messages.Add(new MessageModel
+                    try
                     {
-                        Sender = sender,
-                        Text = message,
-                        Timestamp = localTime,
-                        IsCurrentUser = sender == _authService.Username
-                        // DateGroup теперь вычисляется автоматически
-                    });
+                        var localTime = timestamp.ToLocalTime();
 
-                    OnPropertyChanged(nameof(GroupedMessages));
+                        Messages.Add(new MessageModel
+                        {
+                            Sender = sender ?? string.Empty,
+                            Text = message ?? string.Empty,
+                            Timestamp = localTime,
+                            IsCurrentUser = sender == _authService.Username
+                        });
+
+                        OnPropertyChanged(nameof(GroupedMessages));
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Error processing message: {ex}");
+                    }
                 });
             });
+
+            _hubConnection.On<string, string, byte[], string, DateTime>("ReceiveFileMessage",
+                (sender, fileName, fileData, fileType, timestamp) =>
+                {
+                    MainThread.BeginInvokeOnMainThread(() =>
+                    {
+                        try
+                        {
+                            var localTime = timestamp.ToLocalTime();
+
+                            Messages.Add(new MessageModel
+                            {
+                                Sender = sender ?? string.Empty,
+                                FileName = fileName ?? string.Empty,
+                                FileData = fileData ?? Array.Empty<byte>(),
+                                FileType = fileType ?? string.Empty,
+                                Timestamp = localTime,
+                                IsCurrentUser = sender == _authService.Username
+                            });
+
+                            ScrollToBottom?.Invoke();
+                            OnPropertyChanged(nameof(GroupedMessages));
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"Error processing file message: {ex}");
+                        }
+                    });
+                });
 
             _hubConnection.Reconnecting += ex =>
             {
@@ -229,6 +266,9 @@ namespace МessageAir.ViewModels
             }
         }
 
+
+        #region Messages
+
         [RelayCommand(CanExecute = nameof(CanSendMessage))]
         private async Task SendMessage()
         {
@@ -257,6 +297,73 @@ namespace МessageAir.ViewModels
         }
         public Action ScrollToBottom { get; set; }
 
+        [RelayCommand]
+        private async Task PickAndSendFile()
+        {
+            try
+            {
+                var fileResult = await FilePicker.Default.PickAsync();
+                if (fileResult == null) return;
+
+                using var stream = await fileResult.OpenReadAsync();
+                using var memoryStream = new MemoryStream();
+                await stream.CopyToAsync(memoryStream);
+                var fileBytes = memoryStream.ToArray();
+
+                // Начинаем передачу
+                await _hubConnection.InvokeAsync("StartFileTransfer",
+                    fileResult.FileName,
+                    fileBytes.Length,
+                    fileResult.ContentType);
+
+                // Отправляем чанками
+                const int chunkSize = 32 * 1024; // 32KB
+                for (int offset = 0; offset < fileBytes.Length; offset += chunkSize)
+                {
+                    int length = Math.Min(chunkSize, fileBytes.Length - offset);
+                    byte[] chunk = new byte[length];
+                    Array.Copy(fileBytes, offset, chunk, 0, length);
+                    await _hubConnection.InvokeAsync("SendFileChunk", chunk);
+                }
+
+                // Завершаем передачу
+                await _hubConnection.InvokeAsync("CompleteFileTransfer");
+            }
+            catch (Exception ex)
+            {
+                Status = $"Ошибка: {ex.Message}";
+            }
+        }
+
+
+        [RelayCommand]
+        private async Task DownloadFile(MessageModel message)
+        {
+            if (message?.HasFile != true) return;
+
+            try
+            {
+                Status = "Скачивание файла...";
+
+                // Используем временный файл вместо сохранения
+                var tempFile = Path.Combine(FileSystem.CacheDirectory, message.FileName);
+                await File.WriteAllBytesAsync(tempFile, message.FileData);
+
+                await Launcher.OpenAsync(new OpenFileRequest
+                {
+                    File = new ReadOnlyFile(tempFile),
+                    Title = message.FileName
+                });
+
+                Status = "Файл открыт";
+            }
+            catch (Exception ex)
+            {
+                Status = $"Ошибка: {ex.Message}";
+            }
+        }
+
+        #endregion
 
         private async Task Reconnect()
         {
