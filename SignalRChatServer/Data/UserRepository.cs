@@ -47,6 +47,38 @@ public class UserRepository : IUserRepository
         }
     }
 
+    public async Task<IEnumerable<UserModel>> GetAllUsersExceptAsync(string userId)
+    {
+        try
+        {
+            return await _context.Users
+                .Where(u => u.Id != userId)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting all users except {UserId}", userId);
+            throw;
+        }
+    }
+
+    public async Task<IEnumerable<UserModel>> SearchUsersAsync(string searchTerm)
+    {
+        try
+        {
+            return await _context.Users
+                .Where(u => u.Username.Contains(searchTerm))
+                .AsNoTracking()
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error searching users with term {SearchTerm}", searchTerm);
+            throw;
+        }
+    }
+
     public async Task<bool> ExistsAsync(string username)
     {
         try

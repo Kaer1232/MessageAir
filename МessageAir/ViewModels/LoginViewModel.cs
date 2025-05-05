@@ -6,7 +6,6 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using МessageAir.Services;
-using МessageAir.VIew;
 
 namespace МessageAir.ViewModels
 {
@@ -70,7 +69,7 @@ namespace МessageAir.ViewModels
                 {
                     Username = null;
                     Password = null;
-                    await Shell.Current.GoToAsync($"//ChatView");
+                    await Shell.Current.GoToAsync($"//UsersView");
                 }
                 else
                 {
@@ -176,7 +175,7 @@ namespace МessageAir.ViewModels
                 }
 
                 StatusMessage = "Registration successful!";
-                await Shell.Current.GoToAsync("//ChatView");
+                await Shell.Current.GoToAsync("//UsersView");
             }
             catch (HttpRequestException ex)
             {

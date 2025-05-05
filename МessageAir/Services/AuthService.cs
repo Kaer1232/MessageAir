@@ -69,7 +69,14 @@ namespace МessageAir.Services
             SecureStorage.Default.Remove(AuthTokenKey);
             _httpClient.DefaultRequestHeaders.Authorization = null;
         }
+        public async Task<string?> GetCurrentTokenAsync()
+        {
+            return await SecureStorage.GetAsync("jwt_token")
+                   ?? throw new InvalidOperationException("Токен не найден");
+        }
     }
+
+
 
     public class AuthResult
     {

@@ -1,8 +1,10 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.Extensions.Logging;
 using МessageAir.Interfaces;
 using МessageAir.Services;
 using МessageAir.VIew;
 using МessageAir.ViewModels;
+using МessageAir.Views;
 
 namespace МessageAir
 {
@@ -31,22 +33,24 @@ namespace МessageAir
             };
 
 
-            builder.Services.AddSingleton<AuthService>();
+
             builder.Services
-    .AddSingleton<IAuthService, AuthService>()
-    .AddSingleton<HttpClient>();
-            builder.Services.AddSingleton<IConnectivity>(Connectivity.Current);
+                .AddSingleton<IAuthService, AuthService>()  // Интерфейс + реализация
+                .AddSingleton<AuthService>()                // Конкретный тип (на всякий случай)
+                .AddSingleton<HttpClient>()
+                .AddSingleton<IConnectivity>(Connectivity.Current);
+
 
 
             builder.Services.AddTransient<ChatViewModel>();
             builder.Services.AddTransient<LoginViewModel>();
+            builder.Services.AddTransient<PrivateChatViewModel>();
+            builder.Services.AddTransient<UsersViewModel>();
 
             builder.Services.AddTransient<LoginView>();
             builder.Services.AddTransient<ChatView>();
-
-            builder.Services
-    .AddSingleton<IAuthService, AuthService>()
-    .AddTransient<ChatViewModel>();
+            builder.Services.AddTransient<PrivateChatView>();
+            builder.Services.AddTransient<UsersView>();
 
             builder.Services.AddSingleton<AppShell>();
 

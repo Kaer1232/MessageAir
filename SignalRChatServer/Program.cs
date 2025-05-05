@@ -22,6 +22,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 // Services
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IMessageRepository, MessageRepository>();
+builder.Services.AddScoped<IPrivateMessageRepository, PrivateMessageRepository>();
 builder.Services.AddSingleton<IAuthService, AuthService>();
 
 // CORS
@@ -99,35 +100,75 @@ app.UseAuthorization();
 app.UseWebSockets();
 
 #region CreateData
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+//using (var scope = app.Services.CreateScope())
+//{
+//    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-    try
-    {
-        await db.Database.ExecuteSqlRawAsync(@"
-            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Messages') AND name = 'FileData')
-            BEGIN
-                ALTER TABLE [Messages] ADD 
-                    [FileData] varbinary(max) NULL,
-                    [FileName] nvarchar(max) NULL,
-                    [FileType] nvarchar(max) NULL
-                PRINT 'Columns added to Messages table'
-            END
-        ");
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Error altering table: {ex.Message}");
-    }
-}
+//    try
+//    {
+//        await db.Database.ExecuteSqlRawAsync(@"
+//            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Messages') AND name = 'FileData')
+//            BEGIN
+//                ALTER TABLE [Messages] ADD 
+//                    [FileData] varbinary(max) NULL,
+//                    [FileName] nvarchar(max) NULL,
+//                    [FileType] nvarchar(max) NULL
+//                PRINT 'Columns added to Messages table'
+//            END
+//        ");
+//    }
+//    catch (Exception ex)
+//    {
+//        Console.WriteLine($"Error altering table: {ex.Message}");
+//    }
+//}
+//using (var scope = app.Services.CreateScope())
+//{
+//    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+//    try
+//    {
+//        // Удаляем и создаём таблицу заново
+//        await db.Database.ExecuteSqlRawAsync(@"
+//            IF EXISTS (SELECT * FROM sys.tables WHERE name = 'PrivateMessages')
+//                DROP TABLE PrivateMessages;
+                
+//            CREATE TABLE PrivateMessages (
+//                Id INT IDENTITY(1,1) PRIMARY KEY,
+//                FromUserId NVARCHAR(450) NOT NULL,
+//                FromUserName NVARCHAR(450) NOT NULL,
+//                ToUserId NVARCHAR(450) NOT NULL,
+//                Text NVARCHAR(MAX) NULL,
+//                Timestamp DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+//                FileData VARBINARY(MAX) NULL,
+//                FileName NVARCHAR(MAX) NULL,
+//                FileType NVARCHAR(255) NULL,
+//                FOREIGN KEY (FromUserId) REFERENCES Users(Id) ON DELETE NO ACTION,
+//                FOREIGN KEY (ToUserId) REFERENCES Users(Id) ON DELETE NO ACTION
+//            );
+//        ");
+
+//        Console.WriteLine("Таблица PrivateMessages пересоздана");
+//    }
+//    catch (Exception ex)
+//    {
+//        Console.WriteLine($"Ошибка при пересоздании таблицы: {ex.Message}");
+//    }
+//}
 #endregion
 
 app.UseEndpoints(endpoints =>
 {
     endpoints.MapControllers();
     endpoints.MapHub<ChatHub>("/chatHub");
+    endpoints.MapHub<PrivateChatHub>("/privateChatHub");
 });
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.EnsureCreated(); // Создаёт таблицы, если их нет
+}
 
 #region DeleteMessageModel
 //using (var scope = app.Services.CreateScope())
@@ -146,4 +187,5 @@ app.UseEndpoints(endpoints =>
 //    }
 //}
 #endregion
+
 app.Run();

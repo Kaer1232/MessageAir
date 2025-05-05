@@ -4,6 +4,7 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:view="clr-namespace:МessageAir.VIew"
+    xmlns:views="clr-namespace:МessageAir.Views"
     Shell.FlyoutBehavior="Disabled"
     Title="МessageAir">
 
@@ -16,5 +17,15 @@
         Route="ChatView"
         ContentTemplate="{DataTemplate view:ChatView}"
         Title="Chat"/>
+
+    <ShellContent
+        Route="UsersView"
+        ContentTemplate="{DataTemplate views:UsersView}"
+        Title="Users"/>
+    
+    <ShellContent
+        Route="PrivateChatView"
+        ContentTemplate="{DataTemplate views:PrivateChatView}"
+        Title="PrivateChat"/>
 
 </Shell>

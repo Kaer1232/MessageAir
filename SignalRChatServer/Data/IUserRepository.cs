@@ -10,5 +10,7 @@ namespace SignalRChatServer.Data
         Task AddAsync(UserModel user);
         Task UpdateAsync(UserModel user);
         Task<UserModel> AuthenticateAsync(string username, string password);
+        Task<IEnumerable<UserModel>> GetAllUsersExceptAsync(string userId);
+        Task<IEnumerable<UserModel>> SearchUsersAsync(string searchTerm);
     }
 }

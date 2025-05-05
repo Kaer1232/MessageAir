@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using МessageAir.VIew;
+using МessageAir.Views;
 
 namespace МessageAir
 {
@@ -17,6 +18,8 @@ namespace МessageAir
         {
             Routing.RegisterRoute(nameof(LoginView), typeof(LoginView));
             Routing.RegisterRoute(nameof(ChatView), typeof(ChatView));
+            Routing.RegisterRoute(nameof(UsersView), typeof(UsersView));
+            Routing.RegisterRoute(nameof(PrivateChatView), typeof(PrivateChatView));
         }
     }
 }

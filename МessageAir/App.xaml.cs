@@ -1,5 +1,6 @@
 ﻿using МessageAir.Services;
 using МessageAir.VIew;
+using МessageAir.Views;
 
 namespace МessageAir
 {
@@ -24,6 +25,8 @@ namespace МessageAir
 
             Routing.RegisterRoute(nameof(LoginView), typeof(LoginView));
             Routing.RegisterRoute(nameof(ChatView), typeof(ChatView));
+            Routing.RegisterRoute(nameof(PrivateChatView), typeof(PrivateChatView));
+            Routing.RegisterRoute(nameof(UsersView), typeof(UsersView));
 
             MainPage = new AppShell();
         }
