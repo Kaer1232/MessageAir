@@ -12,7 +12,7 @@ namespace SignalRChatServer.Models
         public string FromUserId { get; set; }
         public string FromUserName { get; set; } // Добавляем
         public string ToUserId { get; set; }
-        public string Text { get; set; }
+        public string? Text { get; set; }
         public DateTime Timestamp { get; set; }
 
         public byte[]? FileData { get; set; }

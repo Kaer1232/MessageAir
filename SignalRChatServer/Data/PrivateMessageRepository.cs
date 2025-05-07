@@ -1,70 +1,106 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using SignalRChatServer.Models;
+using System.Diagnostics;
 
 namespace SignalRChatServer.Data
 {
-    public class PrivateMessageRepository: IPrivateMessageRepository
+    public class PrivateMessageRepository : IPrivateMessageRepository
     {
         private readonly AppDbContext _context;
-        private readonly ILogger<PrivateMessageRepository> _logger;
+        private readonly ILogger<PrivateMessageRepository> Degug;
 
         public PrivateMessageRepository(AppDbContext context, ILogger<PrivateMessageRepository> logger)
         {
             _context = context;
-            _logger = logger;
+            Degug = logger;
         }
 
         public async Task AddMessageAsync(PrivateMessageModel message)
         {
             try
             {
-                message.Timestamp = DateTime.UtcNow;
+                if (message.Timestamp == default)
+                {
+                    message.Timestamp = DateTime.UtcNow;
+                }
+
                 _context.PrivateMessages.Add(message);
                 await _context.SaveChangesAsync();
             }
             catch (DbUpdateException dbEx)
             {
-                _logger.LogError(dbEx, "Ошибка базы данных при сохранении сообщения");
-                throw new Exception("Ошибка сохранения сообщения в базу данных");
+                Degug.LogError(dbEx, "Database error saving message");
+                throw new Exception("Error saving message to database");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Ошибка при добавлении сообщения");
+                Degug.LogError(ex, "Error adding message");
                 throw;
+            }
+        }
+
+        public async Task AddFileMessageAsync(
+    string fromUserId,
+    string toUserId,
+    string fileName,
+    byte[] fileData,
+    string fileType)
+        {
+            try
+            {
+                // Получаем имя отправителя из базы данных
+                var fromUser = await _context.Users.FindAsync(fromUserId);
+                if (fromUser == null)
+                    throw new Exception("Sender user not found");
+
+                var message = new PrivateMessageModel
+                {
+                    FromUserId = fromUserId,
+                    ToUserId = toUserId,
+                    FromUserName = fromUser.Username, // Устанавливаем имя пользователя
+                    FileName = fileName,
+                    FileData = fileData,
+                    FileType = fileType,
+                    Text = $"[Файл: {fileName}]",
+                    Timestamp = DateTime.UtcNow
+                };
+
+                await _context.PrivateMessages.AddAsync(message);
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine(ex, "Error saving file message");
+                throw new Exception("Database operation failed: " + ex.Message);
             }
         }
 
         public async Task<IEnumerable<PrivateMessageModel>> GetConversationAsync(string userId1, string userId2)
         {
-            return await _context.PrivateMessages
-        .Include(m => m.FromUser)
-        .Where(m => (m.FromUserId == userId1 && m.ToUserId == userId2) ||
-                   (m.FromUserId == userId2 && m.ToUserId == userId1))
-        .OrderBy(m => m.Timestamp)
-        .Select(m => new PrivateMessageModel
-        {
-            FromUserId = m.FromUserId,
-            FromUserName = m.FromUser.Username, // Загружаем имя
-            ToUserId = m.ToUserId,
-            Text = m.Text,
-            Timestamp = m.Timestamp
-        })
-        .AsNoTracking()
-        .ToListAsync();
-        }
-
-        public async Task<IEnumerable<PrivateMessageModel>> GetUserMessagesAsync(string userId)
-        {
             try
             {
                 return await _context.PrivateMessages
-                    .Where(m => m.FromUserId == userId || m.ToUserId == userId)
-                    .OrderByDescending(m => m.Timestamp)
+                    .Include(m => m.FromUser)
+                    .Where(m => (m.FromUserId == userId1 && m.ToUserId == userId2) ||
+                               (m.FromUserId == userId2 && m.ToUserId == userId1))
+                    .OrderBy(m => m.Timestamp)
+                    .Select(m => new PrivateMessageModel
+                    {
+                        FromUserId = m.FromUserId,
+                        FromUserName = m.FromUser.Username,
+                        ToUserId = m.ToUserId,
+                        Text = m.Text,
+                        FileName = m.FileName,
+                        FileData = m.FileData,
+                        FileType = m.FileType,
+                        Timestamp = m.Timestamp
+                    })
+                    .AsNoTracking()
                     .ToListAsync();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting messages for user {UserId}", userId);
+                Degug.LogError(ex, "Error getting conversation");
                 throw;
             }
         }
@@ -87,7 +123,7 @@ namespace SignalRChatServer.Data
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting recent contacts for user {UserId}", userId);
+                Degug.LogError(ex, "Error getting recent contacts");
                 throw;
             }
         }

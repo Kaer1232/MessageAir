@@ -31,6 +31,8 @@ namespace МessageAir.ViewModels
         [ObservableProperty]
         private bool _isConnected;
 
+        private readonly Dictionary<string, PrivateMessageModel> _pendingFiles = new();
+
         [ObservableProperty]
         private string _status;
 
@@ -119,45 +121,30 @@ namespace МessageAir.ViewModels
                         Math.Abs((m.Timestamp - message.Timestamp).TotalSeconds) < 1))
                         return;
 
-                    message.IsCurrentUser = message.FromUserId == _authService.Username;
+                    message.IsCurrentUser = message.FromUserName == _authService.Username;
                     Messages.Add(message);
                     OnPropertyChanged(nameof(GroupedMessages));
                     ScrollToBottom?.Invoke();
                 });
             });
 
-            _hubConnection.On<string, string, string, byte[], string, DateTime>("ReceivePrivateFile",
-                (fromUserId, toUserId, fileName, fileData, fileType, timestamp) =>
-                {
-                    MainThread.BeginInvokeOnMainThread(() =>
-                    {
-                        try
-                        {
-                            if (fromUserId != OtherUserId && toUserId != OtherUserId)
-                                return;
+            _hubConnection.On<PrivateMessageModel, string>("ReceivePrivateFileConfirmed",
+     (serverMessage, tempKey) =>
+     {
+         MainThread.BeginInvokeOnMainThread(() =>
+         {
+             if (_pendingFiles.TryGetValue(tempKey, out var pendingMessage))
+             {
+                 // Обновляем сообщение данными с сервера
+                 pendingMessage.Id = serverMessage.Id;
+                 pendingMessage.Timestamp = serverMessage.Timestamp;
 
-                            var msg = new PrivateMessageModel
-                            {
-                                FromUserId = fromUserId,
-                                ToUserId = toUserId,
-                                FileName = fileName,
-                                FileData = fileData,
-                                FileType = fileType,
-                                Timestamp = timestamp.ToLocalTime(),
-                                IsCurrentUser = fromUserId == _authService.Username
-                            };
-
-                            Messages.Add(msg);
-                            OnPropertyChanged(nameof(Messages));
-                            OnPropertyChanged(nameof(GroupedMessages));
-                            ScrollToBottom?.Invoke();
-                        }
-                        catch (Exception ex)
-                        {
-                            Debug.WriteLine($"Error processing private file: {ex}");
-                        }
-                    });
-                });
+                 _pendingFiles.Remove(tempKey);
+                 OnPropertyChanged(nameof(GroupedMessages));
+                 ScrollToBottom?.Invoke();
+             }
+         });
+     });
 
             _hubConnection.Reconnecting += ex =>
             {
@@ -192,42 +179,58 @@ namespace МessageAir.ViewModels
         }
 
         [RelayCommand]
-        private async Task SendMessage()
+        private async Task SendFile()
         {
-            if (string.IsNullOrWhiteSpace(Message)) return;
             if (_hubConnection?.State != HubConnectionState.Connected) return;
 
             try
             {
-                // Создаем локальную копию сообщения перед очисткой
-                var currentMessage = Message;
-                Message = string.Empty; // Очищаем поле ввода сразу
+                var fileResult = await FilePicker.Default.PickAsync();
+                if (fileResult == null) return;
 
-                // Создаем модель сообщения для локального отображения
-                var localMessage = new PrivateMessageModel
+                using var stream = await fileResult.OpenReadAsync();
+                using var memoryStream = new MemoryStream();
+                await stream.CopyToAsync(memoryStream);
+                var fileBytes = memoryStream.ToArray();
+
+                if (fileBytes.Length > 8 * 1024 * 1024)
+                {
+                    Status = "Файл слишком большой (макс. 8MB)";
+                    return;
+                }
+
+                // Генерируем уникальный временный ключ на основе UTC времени
+                var tempUtcKey = DateTime.UtcNow.Ticks.ToString();
+
+                var message = new PrivateMessageModel
                 {
                     FromUserId = _authService.Username,
                     ToUserId = OtherUserId,
-                    Text = currentMessage,
-                    Timestamp = DateTime.Now,
-                    IsCurrentUser = true
+                    FileName = fileResult.FileName,
+                    FileData = fileBytes,
+                    FileType = fileResult.ContentType,
+                    Timestamp = DateTime.Now, // Локальное время для отображения
+                    IsCurrentUser = true,
+                    Text = $"[Отправка файла: {fileResult.FileName}]"
                 };
 
-                // Добавляем сообщение локально
-                Messages.Add(localMessage);
+                // Добавляем в коллекцию
+                Messages.Add(message);
                 OnPropertyChanged(nameof(GroupedMessages));
                 ScrollToBottom?.Invoke();
 
-                // Отправляем на сервер
-                await _hubConnection.InvokeAsync("SendPrivateMessage", OtherUserId, currentMessage);
+                // Отправляем на сервер с временным ключом UTC
+                await _hubConnection.InvokeAsync("SendPrivateFile",
+                    OtherUserId,
+                    fileResult.FileName,
+                    fileBytes,
+                    fileResult.ContentType,
+                    tempUtcKey);
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"Send error: {ex}");
                 Status = $"Ошибка: {ex.Message}";
-
-                // Возвращаем сообщение в поле ввода при ошибке
-                OnPropertyChanged(nameof(Message));
+                Debug.WriteLine($"SendFile error: {ex}");
             }
         }
 
@@ -247,6 +250,7 @@ namespace МessageAir.ViewModels
 
                 // 2. Очищаем текущие сообщения
                 Messages.Clear();
+                Message = null;
 
                 // 3. Сбрасываем данные собеседника
                 OtherUserId = string.Empty;
@@ -261,48 +265,41 @@ namespace МessageAir.ViewModels
             }
         }
 
-
         [RelayCommand]
-        private async Task PickAndSendFile()
+        private async Task SendMessage()
         {
+            if (string.IsNullOrWhiteSpace(Message)) return;
+
             try
             {
-                var fileResult = await FilePicker.Default.PickAsync();
-                if (fileResult == null) return;
-
-                using var stream = await fileResult.OpenReadAsync();
-                using var memoryStream = new MemoryStream();
-                await stream.CopyToAsync(memoryStream);
-                var fileBytes = memoryStream.ToArray();
-
-                await _hubConnection.InvokeAsync("SendPrivateFile",
-                    _authService.Username,
-                    OtherUserId,
-                    fileResult.FileName,
-                    fileBytes,
-                    fileResult.ContentType);
+                await _hubConnection.InvokeAsync("SendPrivateMessage", OtherUserId, Message);
+                ScrollToBottom?.Invoke();
+                Message = string.Empty;
             }
             catch (Exception ex)
             {
-                Status = $"Ошибка отправки файла: {ex.Message}";
-                Debug.WriteLine($"SendFile error: {ex}");
+                Debug.WriteLine($"Send error: {ex}");
+                Status = $"Ошибка: {ex.Message}";
             }
         }
 
         [RelayCommand]
         private async Task DownloadFile(PrivateMessageModel message)
         {
-            if (message?.HasFile != true) return;
+            if (message?.FileData == null) return;
 
             try
             {
                 Status = "Скачивание файла...";
-                var tempFile = Path.Combine(FileSystem.CacheDirectory, message.FileName);
-                await File.WriteAllBytesAsync(tempFile, message.FileData);
 
+                // Сохраняем во временную папку
+                var tempPath = Path.Combine(FileSystem.CacheDirectory, message.FileName);
+                await File.WriteAllBytesAsync(tempPath, message.FileData);
+
+                // Открываем файл
                 await Launcher.OpenAsync(new OpenFileRequest
                 {
-                    File = new ReadOnlyFile(tempFile),
+                    File = new ReadOnlyFile(tempPath),
                     Title = message.FileName
                 });
 
@@ -321,6 +318,7 @@ namespace МessageAir.ViewModels
             {
                 Status = "Загрузка истории...";
                 Messages.Clear();
+                OnPropertyChanged(nameof(GroupedMessages));
 
                 var messages = await _hubConnection.InvokeAsync<IEnumerable<PrivateMessageModel>>(
                     "GetConversation", OtherUserId);
@@ -332,24 +330,23 @@ namespace МessageAir.ViewModels
                     return;
                 }
 
-                var orderedMessages = messages.OrderBy(m => m.Timestamp).ToList();
-
-                foreach (var msg in orderedMessages)
+                var tempList = new List<PrivateMessageModel>();
+                foreach (var msg in messages.OrderBy(m => m.Timestamp))
                 {
                     msg.IsCurrentUser = msg.FromUserName == _authService.Username;
                     msg.FromUserName ??= msg.IsCurrentUser ? _authService.Username : OtherUserName;
-
                     msg.Timestamp = msg.Timestamp.ToLocalTime();
+                    tempList.Add(msg);
+                }
 
-                    Debug.WriteLine($"Загружено: {msg.Text}, От: {msg.FromUserName}, Своё: {msg.IsCurrentUser}");
-                    OnPropertyChanged(nameof(GroupedMessages));
+                // Добавляем все сообщения разом
+                foreach (var msg in tempList)
+                {
                     Messages.Add(msg);
                 }
-                OnPropertyChanged(nameof(GroupedMessages));
-                Status = $"Загружено {orderedMessages.Count} сообщений";
-                Debug.WriteLine($"Успешно загружено {orderedMessages.Count} сообщений");
 
-                await Task.Delay(100);
+                Status = $"Загружено {tempList.Count} сообщений";
+                OnPropertyChanged(nameof(GroupedMessages));
                 ScrollToBottom?.Invoke();
             }
             catch (HubException hex)

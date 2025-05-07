@@ -20,7 +20,10 @@ namespace МessageAir.ViewModels
         private HubConnection _hubConnection;
         private AuthService _authService;
 
+        private bool _isInitialLoad = true;
+
         public ObservableCollection<UserModel> Users { get; } = new();
+
 
         public ICommand SelectUserCommand { get; }
         public ICommand RefreshCommand { get; }
@@ -63,6 +66,13 @@ namespace МessageAir.ViewModels
             }
         }
 
+        public async Task Reset()
+        {
+            _isInitialLoad = true;
+            Users.Clear();
+            await _hubConnection?.StopAsync();
+        }
+
         public async Task InitializeHub()
         {
             try
@@ -98,7 +108,12 @@ namespace МessageAir.ViewModels
                 });
 
                 await _hubConnection.StartAsync();
-                await LoadUsers();
+
+                if (_isInitialLoad)
+                {
+                    await LoadUsers();
+                    _isInitialLoad = false;
+                }
             }
             catch (Exception ex)
             {
@@ -165,6 +180,7 @@ namespace МessageAir.ViewModels
             {
                 // 1. Очищаем список пользователей
                 Users.Clear();
+                _isInitialLoad = true;
 
                 // 2. Останавливаем и уничтожаем подключение
                 if (_hubConnection != null)

@@ -219,7 +219,7 @@
             <!-- Кнопка прикрепления файла -->
             <Button Grid.Column="1"
                     Text="📎"
-                    Command="{Binding PickAndSendFileCommand}"
+                    Command="{Binding SendFileCommand}"
                     WidthRequest="50"
                     BackgroundColor="Transparent"
                     TextColor="#0084FF"

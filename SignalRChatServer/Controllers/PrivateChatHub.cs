@@ -4,6 +4,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using SignalRChatServer.Data;
 using SignalRChatServer.Models;
+using System.Diagnostics;
 
 namespace SignalRChatServer.Controllers
 {
@@ -59,17 +60,54 @@ namespace SignalRChatServer.Controllers
         {
             var currentUserId = Context.UserIdentifier;
             if (string.IsNullOrEmpty(currentUserId))
-            {
                 throw new HubException("User not authenticated");
-            }
+
+            return await _userRepository.GetAllUsersExceptAsync(currentUserId);
+        }
+
+        public async Task SendPrivateFile(
+            string toUserId,
+            string fileName,
+            byte[] fileData,
+            string fileType,
+            string clientTempKey = null)
+        {
+            var fromUserId = Context.UserIdentifier;
+            if (string.IsNullOrEmpty(fromUserId))
+                throw new HubException("User not authenticated");
 
             try
             {
-                return await _userRepository.GetAllUsersExceptAsync(currentUserId);
+                var fromUser = await _userRepository.GetByIdAsync(fromUserId);
+                if (fromUser == null) throw new HubException("Sender not found");
+
+                var message = new PrivateMessageModel
+                {
+                    FromUserId = fromUserId,
+                    FromUserName = fromUser.Username,
+                    ToUserId = toUserId,
+                    FileName = fileName,
+                    FileData = fileData,
+                    FileType = fileType,
+                    Text = $"[Файл: {fileName}]",
+                    Timestamp = DateTime.UtcNow
+                };
+
+                await _messageRepository.AddMessageAsync(message);
+
+                // Отправляем подтверждение с временным ключом
+                await Clients.User(fromUserId).SendAsync(
+                    "ReceivePrivateFileConfirmed",
+                    message,
+                    clientTempKey);
+
+                // Отправляем получателю
+                await Clients.User(toUserId).SendAsync("ReceivePrivateFile", message);
             }
             catch (Exception ex)
             {
-                throw new HubException("Error getting users", ex);
+                Debug.WriteLine(ex, "File send error");
+                throw new HubException("File send failed: " + ex.Message);
             }
         }
 

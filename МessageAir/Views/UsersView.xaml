@@ -5,39 +5,62 @@
              x:Class="МessageAir.Views.UsersView"
              Title="UsersView">
 
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <Style x:Key="UserItemStyle" TargetType="Grid">
+                <Setter Property="Padding" Value="15,10"/>
+                <Setter Property="BackgroundColor" Value="White"/>
+                <Setter Property="Margin" Value="10,5"/>
+                <Setter Property="HeightRequest" Value="70"/>
+            </Style>
+
+            <Style x:Key="AvatarFrameStyle" TargetType="Frame">
+                <Setter Property="HeightRequest" Value="50"/>
+                <Setter Property="WidthRequest" Value="50"/>
+                <Setter Property="CornerRadius" Value="25"/>
+                <Setter Property="BackgroundColor" Value="#0084FF"/>
+                <Setter Property="Padding" Value="0"/>
+            </Style>
+
+            <Style x:Key="AvatarLabelStyle" TargetType="Label">
+                <Setter Property="FontSize" Value="16"/>
+                <Setter Property="TextColor" Value="White"/>
+                <Setter Property="VerticalOptions" Value="Center"/>
+                <Setter Property="HorizontalOptions" Value="Center"/>
+            </Style>
+
+            <Style x:Key="UsernameLabelStyle" TargetType="Label">
+                <Setter Property="TextColor" Value="#333333"/>
+                <Setter Property="FontSize" Value="16"/>
+                <Setter Property="VerticalOptions" Value="Center"/>
+                <Setter Property="Margin" Value="15,0,0,0"/>
+            </Style>
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
     <RefreshView IsRefreshing="{Binding IsRefreshing}"
-             Command="{Binding LoadUsersCommand}">
+             Command="{Binding LoadUsersCommand}"
+                 Background="#F9F9F9">
         <CollectionView ItemsSource="{Binding Users}"
                    SelectionMode="None">
             <CollectionView.ItemTemplate>
                 <DataTemplate>
-                    <Grid Padding="15,10"
-                      BackgroundColor="White">
+                    <Grid Style="{StaticResource UserItemStyle}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
 
                         <!-- Аватар -->
-                        <Frame Grid.Column="0"
-                           HeightRequest="50"
-                           WidthRequest="50"
-                           CornerRadius="25"
-                           BackgroundColor="#FF85A2D8">
+                        <Frame Style="{StaticResource AvatarFrameStyle}">
                             <Label Text="{Binding Username, StringFormat='{0}'}"
-                               FontSize="16"
-                               TextColor="White"
-                               VerticalOptions="Center"
-                               HorizontalOptions="Center"/>
+                               Style="{StaticResource AvatarLabelStyle}"/>
                         </Frame>
 
                         <!-- Имя пользователя -->
                         <Label Grid.Column="1"
                            Text="{Binding Username}"
-                               TextColor="Black"
-                           FontSize="16"
-                           VerticalOptions="Center"
-                           Margin="10,0,0,0"/>
+                               Style="{StaticResource UsernameLabelStyle}"/>
 
                         <!-- Обработчик нажатия -->
                         <Grid.GestureRecognizers>

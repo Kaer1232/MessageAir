@@ -1,5 +1,5 @@
-﻿using System.Diagnostics;
-using МessageAir.VIew;
+﻿using МessageAir.VIew;
+using МessageAir.ViewModels;
 using МessageAir.Views;
 
 namespace МessageAir

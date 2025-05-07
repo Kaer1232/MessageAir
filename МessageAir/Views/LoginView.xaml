@@ -9,7 +9,57 @@
     <ContentPage.Resources>
         <ResourceDictionary>
             <converters:InverseBoolConverter x:Key="InverseBoolConverter" />
-        </ResourceDictionary>
+
+        <Style x:Key="HeaderLabelStyle" TargetType="Label">
+        <Setter Property="FontSize" Value="24"/>
+        <Setter Property="HorizontalOptions" Value="Center"/>
+        <Setter Property="Margin" Value="0,0,0,20"/>
+        <Setter Property="TextColor" Value="#333333"/>
+    </Style>
+
+    <Style x:Key="AuthFrameStyle" TargetType="Frame">
+        <Setter Property="BorderColor" Value="#E0E0E0"/>
+        <Setter Property="CornerRadius" Value="12"/>
+        <Setter Property="Padding" Value="20"/>
+        <Setter Property="BackgroundColor" Value="White"/>
+        <Setter Property="HasShadow" Value="True"/>
+    </Style>
+
+    <Style x:Key="EntryStyle" TargetType="Entry">
+        <Setter Property="FontSize" Value="16"/>
+        <Setter Property="PlaceholderColor" Value="#999999"/>
+        <Setter Property="TextColor" Value="#333333"/>
+        <Setter Property="HeightRequest" Value="50"/>
+    </Style>
+
+    <Style x:Key="PrimaryButtonStyle" TargetType="Button">
+        <Setter Property="BackgroundColor" Value="#0084FF"/>
+        <Setter Property="TextColor" Value="White"/>
+        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="HeightRequest" Value="50"/>
+        <Setter Property="FontSize" Value="16"/>
+    </Style>
+
+    <Style x:Key="SecondaryButtonStyle" TargetType="Button">
+        <Setter Property="BackgroundColor" Value="Transparent"/>
+        <Setter Property="TextColor" Value="#0084FF"/>
+        <Setter Property="HeightRequest" Value="50"/>
+        <Setter Property="FontSize" Value="16"/>
+    </Style>
+
+    <Style x:Key="StatusLabelStyle" TargetType="Label">
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="HorizontalOptions" Value="Center"/>
+        <Setter Property="TextColor" Value="#666666"/>
+    </Style>
+
+    <Style x:Key="ErrorLabelStyle" TargetType="Label">
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="HorizontalOptions" Value="Center"/>
+        <Setter Property="TextColor" Value="#FF3B30"/>
+        <Setter Property="Margin" Value="0,0,0,10"/>
+    </Style>
+    </ResourceDictionary>
     </ContentPage.Resources>
 
     <ScrollView>
@@ -17,35 +67,30 @@
 
             <!-- Header -->
             <Label Text="Welcome to MessageAir" 
-                   FontSize="24"
-                   HorizontalOptions="Center"/>
+                   Style="{StaticResource HeaderLabelStyle}"/>
 
             <!-- Login Form -->
-            <Frame BorderColor="LightGray" 
-                   CornerRadius="10"
-                   Padding="20">
+            <Frame Style="{StaticResource AuthFrameStyle}">
                 <VerticalStackLayout Spacing="15">
                     <Entry Placeholder="Username" 
+                           Style="{StaticResource EntryStyle}"
                            Text="{Binding Username}"/>
 
                     <Entry Placeholder="Password" 
+                           Style="{StaticResource EntryStyle}"
                            Text="{Binding Password}"
                            IsPassword="True"/>
 
                     <Label Text="{Binding AuthStatus}"
-                           TextColor="Red"
-                           HorizontalOptions="Center"/>
+                           Style="{StaticResource ErrorLabelStyle}"/>
 
                     <Button Text="Login" 
                             Command="{Binding LoginCommand}"
-                            BackgroundColor="#512BD4"
-                            TextColor="White"
-                            CornerRadius="10"/>
+                     Style="{StaticResource PrimaryButtonStyle}"/>
 
                     <Button Text="Register" 
                             Command="{Binding RegisterCommand}"
-                            TextColor="#512BD4"
-                            BackgroundColor="Transparent"/>
+                            Style="{StaticResource SecondaryButtonStyle}"/>
                 </VerticalStackLayout>
             </Frame>
 
@@ -54,7 +99,7 @@
                               IsVisible="{Binding IsBusy}"/>
 
             <Label Text="{Binding ConnectionStatus}"
-                   HorizontalOptions="Center"/>
+                   Style="{StaticResource StatusLabelStyle}"/>
         </VerticalStackLayout>
     </ScrollView>
 </ContentPage>

@@ -12,6 +12,9 @@ namespace МessageAir.Services
         private const string AuthTokenKey = "auth_token";
         private readonly HttpClient _httpClient;
 
+        public event Action OnLogin;
+        public event Action OnLogout;
+
         public string Username { get; private set; }
         public string Token { get; private set; }
 

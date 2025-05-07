@@ -44,6 +44,26 @@ namespace SignalRChatServer.Data
 
                 entity.Property(m => m.Timestamp)
                     .HasDefaultValueSql("GETUTCDATE()");
+
+                entity.Property(m => m.FileData)
+                    .HasColumnType("varbinary(max)");
+            });
+
+
+            modelBuilder.Entity<PrivateMessageModel>(entity =>
+            {
+                entity.HasOne(m => m.FromUser)
+                    .WithMany()
+                    .HasForeignKey(m => m.FromUserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(m => m.ToUser)
+                    .WithMany()
+                    .HasForeignKey(m => m.ToUserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.Property(m => m.Timestamp)
+                    .HasDefaultValueSql("GETUTCDATE()");
             });
         }
     }
