@@ -56,8 +56,6 @@ namespace МessageAir.ViewModels
             { "OtherUserId", user.Id },
             { "OtherUserName", user.Username }
         };
-
-                // Полный сброс стека навигации + анимация
                 await Shell.Current.GoToAsync("//PrivateChatView", true, parameters);
             }
             catch (Exception ex)
@@ -117,9 +115,7 @@ namespace МessageAir.ViewModels
             }
             catch (Exception ex)
             {
-                await Shell.Current.DisplayAlert("Милая ошибка",
-                    $"Не удалось подключиться: {ex.Message}",
-                    "Обнять и плакать");
+                Debug.WriteLine($"Милая ошибка: Не удалось подключиться: {ex.Message}");
             }
         }
 

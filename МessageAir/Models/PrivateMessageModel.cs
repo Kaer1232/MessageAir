@@ -6,6 +6,7 @@ namespace МessageAir.Models
     public class PrivateMessageModel
     {
         public int Id { get; set; }
+        [NotMapped] // Не сохраняется в БД
         public string FromUserId { get; set; }
         public string ToUserId { get; set; }
         public string FromUserName { get; set; }
@@ -14,6 +15,8 @@ namespace МessageAir.Models
         public byte[]? FileData { get; set; }
         public string? FileName { get; set; }
         public string? FileType { get; set; }
+        public bool IsEdited { get; set; }
+        public bool IsDeleted { get; set; }
         public string DateGroup => Timestamp.Date.ToString("yyyy-MM-dd");
 
         [NotMapped]

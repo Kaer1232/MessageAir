@@ -1,5 +1,4 @@
-﻿using Microsoft.AspNetCore.SignalR.Client;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using МessageAir.Interfaces;
 using МessageAir.Services;
 using МessageAir.VIew;

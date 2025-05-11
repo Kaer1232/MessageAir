@@ -1,7 +1,5 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.Data.SqlClient;
-using Microsoft.EntityFrameworkCore;
 using SignalRChatServer.Data;
 using SignalRChatServer.Models;
 using System.Diagnostics;
@@ -9,7 +7,7 @@ using System.Diagnostics;
 namespace SignalRChatServer.Controllers
 {
     [Authorize]
-    public class PrivateChatHub: Hub
+    public class PrivateChatHub : Hub
     {
         private readonly IPrivateMessageRepository _messageRepository;
         private readonly IUserRepository _userRepository;
@@ -20,9 +18,8 @@ namespace SignalRChatServer.Controllers
             _userRepository = userRepo;
         }
 
-        public async Task SendPrivateMessage( string toUserId, string message)
+        public async Task SendPrivateMessage(string toUserId, string message)
         {
-
             try
             {
                 var fromUserId = Context.UserIdentifier;
@@ -51,7 +48,7 @@ namespace SignalRChatServer.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Ошибка при отправке сообщения: {ex}");
+                Debug.WriteLine($"Ошибка при отправке сообщения: {ex}");
                 throw new HubException($"Не удалось отправить сообщение: {ex.Message}");
             }
         }
@@ -66,11 +63,10 @@ namespace SignalRChatServer.Controllers
         }
 
         public async Task SendPrivateFile(
-            string toUserId,
-            string fileName,
-            byte[] fileData,
-            string fileType,
-            string clientTempKey = null)
+    string toUserId,
+    string fileName,
+    byte[] fileData,
+    string fileType)
         {
             var fromUserId = Context.UserIdentifier;
             if (string.IsNullOrEmpty(fromUserId))
@@ -95,14 +91,11 @@ namespace SignalRChatServer.Controllers
 
                 await _messageRepository.AddMessageAsync(message);
 
-                // Отправляем подтверждение с временным ключом
-                await Clients.User(fromUserId).SendAsync(
-                    "ReceivePrivateFileConfirmed",
-                    message,
-                    clientTempKey);
-
-                // Отправляем получателю
+                // Отправляем только получателю
                 await Clients.User(toUserId).SendAsync("ReceivePrivateFile", message);
+
+                // Возвращаем сообщение отправителю через специальный метод
+                await Clients.Caller.SendAsync("ReceiveOwnFile", message);
             }
             catch (Exception ex)
             {
@@ -111,6 +104,68 @@ namespace SignalRChatServer.Controllers
             }
         }
 
+        public async Task DeleteMessage(int messageId)
+        {
+            var currentUserId = Context.UserIdentifier;
+            var message = await _messageRepository.GetMessageByIdAsync(messageId);
+
+            if (message == null) throw new HubException("Message not found");
+            if (message.FromUserId != currentUserId) throw new HubException("You can only delete your own messages");
+
+            // Сохраняем имя отправителя перед удалением
+            string senderName = message.FromUserName;
+
+            message.Text = "[Сообщение удалено]";
+            message.IsDeleted = true;
+            message.FileData = null;
+            message.FileName = null;
+            message.FileType = null;
+
+            await _messageRepository.UpdateMessageAsync(message);
+
+            // Отправляем обновление с сохранением имени отправителя
+            var updatedMessage = new PrivateMessageModel
+            {
+                Id = message.Id,
+                FromUserId = message.FromUserId,
+                FromUserName = senderName, // Сохраняем оригинальное имя
+                ToUserId = message.ToUserId,
+                Text = message.Text,
+                Timestamp = message.Timestamp,
+                IsDeleted = true
+            };
+
+            await Clients.User(message.FromUserId).SendAsync("MessageDeleted", updatedMessage);
+            await Clients.User(message.ToUserId).SendAsync("MessageDeleted", updatedMessage);
+        }
+
+        public async Task UpdateMessage(int messageId, string newText)
+        {
+            try
+            {
+                var currentUserId = Context.UserIdentifier;
+                var message = await _messageRepository.GetMessageByIdAsync(messageId);
+
+                if (message == null) throw new HubException("Message not found");
+                if (message.FromUserId != currentUserId) throw new HubException("Not authorized to edit this message");
+                if (message.FileData != null) throw new HubException("Cannot edit file messages");
+                if (message.IsDeleted) throw new HubException("Cannot edit deleted message");
+
+                message.Text = newText;
+                message.IsEdited = true;
+                message.Timestamp = DateTime.UtcNow;
+
+                await _messageRepository.UpdateMessageAsync(message);
+
+                // Уведомляем обоих пользователей об изменении
+                await Clients.User(message.FromUserId).SendAsync("MessageUpdated", message);
+                await Clients.User(message.ToUserId).SendAsync("MessageUpdated", message);
+            }
+            catch (Exception ex)
+            {
+                throw new HubException($"Failed to update message: {ex.Message}");
+            }
+        }
 
         public async Task<IEnumerable<PrivateMessageModel>> GetConversation(string otherUserId)
         {

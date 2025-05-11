@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.SignalR.Client;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Globalization;
-using System.Text.Json.Serialization;
 using МessageAir.Models;
 using МessageAir.Services;
 
@@ -43,7 +42,6 @@ namespace МessageAir.ViewModels
         {
             _authService = authService;
 
-            // Автоматическая инициализация при получении OtherUserId
             this.PropertyChanged += (sender, args) =>
             {
                 if (args.PropertyName == nameof(OtherUserId) && !string.IsNullOrEmpty(OtherUserId))
@@ -67,7 +65,6 @@ namespace МessageAir.ViewModels
 
             try
             {
-                // Останавливаем предыдущее подключение
                 if (_hubConnection != null)
                 {
                     await _hubConnection.StopAsync();
@@ -102,8 +99,8 @@ namespace МessageAir.ViewModels
 
         private void ConfigureHubEvents()
         {
-            _hubConnection.Remove("ReceivePrivateMessage");
             _hubConnection.Remove("ReceivePrivateFile");
+            _hubConnection.Remove("ReceiveOwnFile");
 
             // Добавляем новые обработчики
             _hubConnection.On<PrivateMessageModel>("ReceivePrivateMessage", message =>
@@ -128,23 +125,110 @@ namespace МessageAir.ViewModels
                 });
             });
 
-            _hubConnection.On<PrivateMessageModel, string>("ReceivePrivateFileConfirmed",
-     (serverMessage, tempKey) =>
-     {
-         MainThread.BeginInvokeOnMainThread(() =>
-         {
-             if (_pendingFiles.TryGetValue(tempKey, out var pendingMessage))
-             {
-                 // Обновляем сообщение данными с сервера
-                 pendingMessage.Id = serverMessage.Id;
-                 pendingMessage.Timestamp = serverMessage.Timestamp;
+            _hubConnection.On<PrivateMessageModel>("ReceivePrivateFile", message =>
+            {
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    if (message.FromUserId != OtherUserId && message.ToUserId != OtherUserId)
+                        return;
 
-                 _pendingFiles.Remove(tempKey);
-                 OnPropertyChanged(nameof(GroupedMessages));
-                 ScrollToBottom?.Invoke();
-             }
-         });
-     });
+                    message.Timestamp = message.Timestamp.ToLocalTime();
+                    message.IsCurrentUser = message.FromUserName == _authService.Username;
+
+                    Messages.Add(message);
+                    OnPropertyChanged(nameof(GroupedMessages));
+                    ScrollToBottom?.Invoke();
+                });
+            });
+
+            _hubConnection.On<PrivateMessageModel>("ReceiveOwnFile", message =>
+            {
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    message.Timestamp = message.Timestamp.ToLocalTime();
+                    message.IsCurrentUser = true;
+
+                    // Обновляем существующее сообщение вместо добавления нового
+                    var existingMsg = Messages.FirstOrDefault(m =>
+                        m.FileName == message.FileName &&
+                        Math.Abs((m.Timestamp - message.Timestamp).TotalSeconds) < 2);
+
+                    if (existingMsg != null)
+                    {
+                        existingMsg.Id = message.Id;
+                        existingMsg.Timestamp = message.Timestamp;
+                    }
+                    else
+                    {
+                        Messages.Add(message);
+                    }
+
+                    OnPropertyChanged(nameof(GroupedMessages));
+                    ScrollToBottom?.Invoke();
+                });
+            });
+
+            _hubConnection.On<PrivateMessageModel>("MessageDeleted", deletedMessage =>
+            {
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    // Находим сообщение в локальной коллекции
+                    var existingMessage = Messages.FirstOrDefault(m => m.Id == deletedMessage.Id);
+
+                    if (existingMessage != null)
+                    {
+                        // Обновляем только нужные поля
+                        existingMessage.Text = deletedMessage.Text;
+                        existingMessage.IsDeleted = true;
+                        existingMessage.FileData = null;
+                        existingMessage.FileName = null;
+                        existingMessage.FileType = null;
+
+                        // Сохраняем имя отправителя
+                        if (!string.IsNullOrEmpty(deletedMessage.FromUserName))
+                        {
+                            existingMessage.FromUserName = deletedMessage.FromUserName;
+                        }
+                    }
+                    else
+                    {
+                        // Если сообщения не было в истории, добавляем его
+                        deletedMessage.Timestamp = deletedMessage.Timestamp.ToLocalTime();
+                        deletedMessage.IsCurrentUser = deletedMessage.FromUserName == _authService.Username;
+                        Messages.Add(deletedMessage);
+                    }
+
+                    OnPropertyChanged(nameof(GroupedMessages));
+                });
+            });
+
+            _hubConnection.On<PrivateMessageModel>("MessageUpdated", updatedMessage =>
+            {
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    updatedMessage.Timestamp = updatedMessage.Timestamp.ToLocalTime();
+                    updatedMessage.IsCurrentUser = updatedMessage.FromUserName == _authService.Username;
+
+                    var existingMessage = Messages.FirstOrDefault(m => m.Id == updatedMessage.Id);
+
+                    if (existingMessage != null)
+                    {
+                        // Обновляем существующее сообщение
+                        existingMessage.Text = updatedMessage.Text;
+                        existingMessage.IsEdited = updatedMessage.IsEdited;
+                        existingMessage.IsDeleted = updatedMessage.IsDeleted;
+                        existingMessage.FileData = updatedMessage.FileData;
+                        existingMessage.FileName = updatedMessage.FileName;
+                        existingMessage.FileType = updatedMessage.FileType;
+                    }
+                    else
+                    {
+                        Messages.Add(updatedMessage);
+                    }
+
+                    OnPropertyChanged(nameof(GroupedMessages));
+                });
+            });
 
             _hubConnection.Reconnecting += ex =>
             {
@@ -159,6 +243,28 @@ namespace МessageAir.ViewModels
                 IsConnected = true;
                 return Task.CompletedTask;
             };
+        }
+
+        [RelayCommand]
+        private async Task ShowContextMenu(PrivateMessageModel message)
+        {
+            if (message == null || !message.IsCurrentUser) return;
+
+            string action = await Shell.Current.DisplayActionSheet(
+                "Действия с сообщением",
+                "Отмена",
+                null,
+                message.HasFile ? new[] { "Удалить" } : new[] { "Редактировать", "Удалить" });
+
+            switch (action)
+            {
+                case "Редактировать":
+                    await EditMessage(message);
+                    break;
+                case "Удалить":
+                    await DeleteMessage(message);
+                    break;
+            }
         }
 
         public ObservableCollection<PrivateMessageGroup> GroupedMessages
@@ -199,33 +305,28 @@ namespace МessageAir.ViewModels
                     return;
                 }
 
-                // Генерируем уникальный временный ключ на основе UTC времени
-                var tempUtcKey = DateTime.UtcNow.Ticks.ToString();
-
-                var message = new PrivateMessageModel
+                // Создаем временное сообщение для отображения
+                var tempMessage = new PrivateMessageModel
                 {
-                    FromUserId = _authService.Username,
+                    FromUserName = _authService.Username,
                     ToUserId = OtherUserId,
                     FileName = fileResult.FileName,
                     FileData = fileBytes,
                     FileType = fileResult.ContentType,
-                    Timestamp = DateTime.Now, // Локальное время для отображения
+                    Timestamp = DateTime.Now,
                     IsCurrentUser = true,
                     Text = $"[Отправка файла: {fileResult.FileName}]"
                 };
 
-                // Добавляем в коллекцию
-                Messages.Add(message);
+                Messages.Add(tempMessage);
                 OnPropertyChanged(nameof(GroupedMessages));
                 ScrollToBottom?.Invoke();
 
-                // Отправляем на сервер с временным ключом UTC
                 await _hubConnection.InvokeAsync("SendPrivateFile",
                     OtherUserId,
                     fileResult.FileName,
                     fileBytes,
-                    fileResult.ContentType,
-                    tempUtcKey);
+                    fileResult.ContentType);
             }
             catch (Exception ex)
             {
@@ -233,7 +334,6 @@ namespace МessageAir.ViewModels
                 Debug.WriteLine($"SendFile error: {ex}");
             }
         }
-
 
         [RelayCommand]
         private async void Back()
@@ -282,6 +382,56 @@ namespace МessageAir.ViewModels
                 Status = $"Ошибка: {ex.Message}";
             }
         }
+
+        [RelayCommand]
+        private async Task DeleteMessage(PrivateMessageModel message)
+        {
+            if (message == null || !message.IsCurrentUser) return;
+
+            try
+            {
+                // Локальное обновление перед отправкой на сервер
+                message.Text = "[Сообщение удалено]";
+                message.IsDeleted = true;
+                OnPropertyChanged(nameof(GroupedMessages));
+
+                await _hubConnection.InvokeAsync("DeleteMessage", message.Id);
+            }
+            catch (Exception ex)
+            {
+                // Откат изменений при ошибке
+                message.IsDeleted = false;
+                OnPropertyChanged(nameof(GroupedMessages));
+                await Shell.Current.DisplayAlert("Ошибка", ex.Message, "OK");
+            }
+        }
+
+        [RelayCommand]
+        private async Task EditMessage(PrivateMessageModel message)
+        {
+            if (message == null || !message.IsCurrentUser || message.HasFile) return;
+
+            string result = await Shell.Current.DisplayPromptAsync(
+                "Редактирование сообщения",
+                "Введите новый текст:",
+                initialValue: message.Text,
+                maxLength: 1000,
+                keyboard: Keyboard.Default);
+
+            if (!string.IsNullOrWhiteSpace(result) && result != message.Text)
+            {
+                try
+                {
+                    await _hubConnection.InvokeAsync("UpdateMessage", message.Id, result);
+                }
+                catch (Exception ex)
+                {
+                    Status = $"Ошибка редактирования: {ex.Message}";
+                    Debug.WriteLine($"EditMessage error: {ex}");
+                }
+            }
+        }
+
 
         [RelayCommand]
         private async Task DownloadFile(PrivateMessageModel message)

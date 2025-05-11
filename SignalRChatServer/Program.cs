@@ -131,20 +131,22 @@ app.UseWebSockets();
 //        // Удаляем и создаём таблицу заново
 //        await db.Database.ExecuteSqlRawAsync(@"
 //            IF EXISTS (SELECT * FROM sys.tables WHERE name = 'PrivateMessages')
-//                DROP TABLE PrivateMessages;
-                
-//            CREATE TABLE PrivateMessages (
-//                Id INT IDENTITY(1,1) PRIMARY KEY,
-//                FromUserId NVARCHAR(450) NOT NULL,
-//                FromUserName NVARCHAR(450) NOT NULL,
-//                ToUserId NVARCHAR(450) NOT NULL,
-//                Text NVARCHAR(MAX) NULL,
-//                Timestamp DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
-//                FileData VARBINARY(MAX) NULL,
-//                FileName NVARCHAR(MAX) NULL,
-//                FileType NVARCHAR(255) NULL,
-//                FOREIGN KEY (FromUserId) REFERENCES Users(Id) ON DELETE NO ACTION,
-//                FOREIGN KEY (ToUserId) REFERENCES Users(Id) ON DELETE NO ACTION
+//    DROP TABLE PrivateMessages;
+    
+//CREATE TABLE PrivateMessages (
+//    Id INT IDENTITY(1,1) PRIMARY KEY,
+//    FromUserId NVARCHAR(450) NOT NULL,
+//    FromUserName NVARCHAR(450) NOT NULL,
+//    ToUserId NVARCHAR(450) NOT NULL,
+//    Text NVARCHAR(MAX) NULL,
+//    Timestamp DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+//    FileData VARBINARY(MAX) NULL,
+//    FileName NVARCHAR(MAX) NULL,
+//    FileType NVARCHAR(255) NULL,
+//    IsEdited BIT NOT NULL DEFAULT 0,
+//    IsDeleted BIT NOT NULL DEFAULT 0,
+//    FOREIGN KEY (FromUserId) REFERENCES Users(Id) ON DELETE NO ACTION,
+//    FOREIGN KEY (ToUserId) REFERENCES Users(Id) ON DELETE NO ACTION
 //            );
 //        ");
 
